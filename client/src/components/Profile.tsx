@@ -1,3 +1,4 @@
+import avatar from '../assets/hacker-avatar.webp'
 import { useAuth } from '../hooks/useAuth'
 import { onLinkClick } from '../hooks/useRoute'
 import { ConsoleLayout } from './ConsoleLayout'
@@ -44,7 +45,7 @@ export function Profile() {
               {/* Identity card */}
               <section className="dcard prof-card" aria-labelledby="p-id">
                 <div className="prof-id">
-                  <span className="prof-avatar" aria-hidden="true">{initials}</span>
+                  <span className="prof-avatar" aria-hidden="true"><img src={avatar} alt="" width={64} height={64} /><b>{initials}</b></span>
                   <div>
                     <h2 id="p-id" className="prof-name">{student.fullName}</h2>
                     <p className="tmuted">{student.institution}{student.branch ? ` · ${student.branch}` : ''}</p>

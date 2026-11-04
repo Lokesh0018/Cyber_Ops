@@ -1156,13 +1156,14 @@ html:has(.authpage){scrollbar-gutter:stable}
 .dash-brand small{display:block;margin-top:3px;font-family:var(--m);font-weight:400;font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--term-dim)}
 .dash-session{display:inline-flex;align-items:center;gap:7px;font-family:var(--m);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--term-green)}
 .dash-session .dot{width:6px;height:6px;border-radius:50%;background:var(--term-green);box-shadow:0 0 8px var(--term-green)}
-.dash-nav{display:inline-flex;gap:2px;padding:3px;border-radius:10px;border:1px solid var(--term-border);background:rgba(0,184,255,.04)}
-.dash-nav a{display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border-radius:8px;color:var(--term-muted);text-decoration:none;
-  font-family:var(--d);font-weight:600;font-size:.86rem;transition:background-color .2s ease,color .2s ease}
-.dash-nav a:hover{color:var(--term-text)}
-.dash-nav a[aria-current=page]{background:var(--term-cyan);color:#06101c}
-.dash-nav a:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
-.dash-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.dash-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+/* Hacker avatar → profile */
+.dash-avatar{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;text-decoration:none;
+  border:1px solid var(--term-border);background:rgba(0,184,255,.05);color:var(--term-text);transition:border-color .2s ease,background-color .2s ease,box-shadow .2s ease}
+.dash-avatar img{width:40px;height:40px;border-radius:50%;display:block;object-fit:cover;object-position:50% 30%;border:1px solid rgba(0,184,255,.45);background:#070d18;box-shadow:0 0 16px rgba(0,184,255,.35);transition:box-shadow .2s ease}
+.dash-avatar:hover,.dash-avatar.on{border-color:var(--term-cyan);background:rgba(0,184,255,.1)}
+.dash-avatar:hover img{box-shadow:0 0 24px rgba(0,184,255,.6)}
+.dash-avatar:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
 .dash-logout{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:9px;cursor:pointer;
   border:1px solid var(--term-border);background:rgba(0,184,255,.06);color:var(--term-text);font-family:var(--d);font-weight:600;font-size:.88rem;
   transition:border-color .2s ease,background-color .2s ease}
@@ -1255,8 +1256,11 @@ html:has(.authpage){scrollbar-gutter:stable}
 
 /* Profile page */
 .prof-id{display:flex;gap:16px;align-items:flex-start}
-.prof-avatar{flex-shrink:0;width:64px;height:64px;border-radius:16px;display:grid;place-items:center;font-family:var(--d);font-weight:700;font-size:1.4rem;
-  color:#06101c;background:linear-gradient(135deg,var(--term-cyan),#087dc3);box-shadow:0 0 0 1px rgba(0,184,255,.35),0 0 24px rgba(0,184,255,.3)}
+.prof-avatar{position:relative;flex-shrink:0;width:64px;height:64px;border-radius:50%;display:block;box-shadow:0 0 24px rgba(0,184,255,.3)}
+.prof-avatar img{display:block;width:64px;height:64px;border-radius:50%;object-fit:cover;object-position:50% 30%;border:1px solid rgba(0,184,255,.45);background:#070d18}
+/* initials badge on the avatar's shoulder */
+.prof-avatar b{position:absolute;right:-6px;bottom:-4px;padding:1px 6px;border-radius:999px;font-family:var(--m);font-size:.6rem;letter-spacing:.08em;
+  color:#06101c;background:var(--term-cyan);box-shadow:0 0 0 2px var(--term-bg)}
 .prof-name{font-family:var(--d);font-size:1.3rem;line-height:1.2}
 .prof-pill{margin-top:8px}
 .prof-meta{margin:18px 0 0;padding-top:14px;border-top:1px dashed rgba(66,153,225,.2);display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -1278,9 +1282,6 @@ html:has(.authpage){scrollbar-gutter:stable}
 .prof-foot b{color:var(--term-text)}
 .prof-btn{width:auto;min-width:220px;text-decoration:none}
 @media(max-width:900px){
-  .dash-nav{order:3;width:100%}
-  .dash-nav a{flex:1;justify-content:center}
-  .dash-top{flex-wrap:wrap}
   .prof-rows li{grid-template-columns:22px 1fr;row-gap:0}
   .prof-rows .prof-value{grid-column:2}
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import avatar from '../assets/hacker-avatar.webp'
 import logo from '../assets/shm-logo.webp'
 import { useAuth, type Student } from '../hooks/useAuth'
 import { navigate, onLinkClick } from '../hooks/useRoute'
@@ -51,12 +52,18 @@ export function ConsoleLayout({ page, children }: { page: ConsolePage; children:
           <img src={logo} alt="" width={36} height={36} />
           <span>Cyber<b>Ops</b><small>student console</small></span>
         </a>
-        <nav className="dash-nav" aria-label="Console">
-          <a href="/dashboard" aria-current={page === 'dashboard' ? 'page' : undefined} onClick={onLinkClick}>Dashboard</a>
-          <a href="/profile" aria-current={page === 'profile' ? 'page' : undefined} onClick={onLinkClick}>Profile</a>
-        </nav>
         <span className="dash-session"><span className="dot" aria-hidden="true" /> {checking ? 'verifying session' : 'session verified'}</span>
         <nav className="dash-actions" aria-label="Account">
+          <a
+            className={page === 'profile' ? 'dash-avatar on' : 'dash-avatar'}
+            href="/profile"
+            onClick={onLinkClick}
+            aria-label={`Profile — ${student.fullName}`}
+            aria-current={page === 'profile' ? 'page' : undefined}
+            title="Your profile"
+          >
+            <img src={avatar} alt="" width={40} height={40} />
+          </a>
           <button className="dash-logout" type="button" onClick={logout}><LogoutIcon /> Logout</button>
         </nav>
       </header>

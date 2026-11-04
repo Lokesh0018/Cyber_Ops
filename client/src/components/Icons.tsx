@@ -41,4 +41,5 @@ export const BuildingIcon = icon(<><rect x="4" y="3" width="16" height="18" rx="
 export const EyeIcon = icon(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>)
 export const EyeOffIcon = icon(<><path d="M3 3l18 18M10.6 10.6A3 3 0 0013.4 13.4M9.9 5.2A10.4 10.4 0 0112 5c6.5 0 10 7 10 7a17 17 0 01-3.2 4M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 004.4-1" /></>)
 export const AlertIcon = icon(<><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></>)
+export const HoodIcon = icon(<><path d="M4 21v-2a8 8 0 0116 0v2" /><path d="M12 3c-3.5 0-6 2.8-6 6.5V12a6 6 0 0012 0V9.5C18 5.8 15.5 3 12 3z" /><path d="M9 12.5c.6.6 1.6 1 3 1s2.4-.4 3-1" /><path d="M9.5 9.5h.01M14.5 9.5h.01" /></>)
 export const LogoutIcon = icon(<><path d="M10 17l5-5-5-5M15 12H3" /><path d="M13 3h6a2 2 0 012 2v14a2 2 0 01-2 2h-6" /></>)
