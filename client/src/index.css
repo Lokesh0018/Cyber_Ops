@@ -608,21 +608,47 @@ h1.title .title-2{display:block;color:transparent;
 .spot-feats p{font-size:.88rem;color:var(--muted)}
 
 /* ---------- CTF ---------- */
-.ctf-band{background:radial-gradient(700px 400px at 15% 30%, rgba(57,255,136,.08), transparent 60%),var(--bg-alt)}
+.ctf-band{background:radial-gradient(700px 400px at 15% 30%, rgba(57,255,136,.07), transparent 60%),var(--bg-alt)}
 .ctf-band .eyebrow{color:var(--green)}
 .ctf-band .shead h2 .g{color:var(--green)}
-.ctf-meta{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:34px}
-.ctf-meta .chip .ico{color:var(--green)}
+
+/* road to the finale: four steps on one connecting rail; the competition step is emphasised */
+.ctf-road{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:0 0 40px;padding:0;list-style:none}
+.ctf-road::before{content:"";position:absolute;left:12.5%;right:12.5%;top:21px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(57,255,136,.15),rgba(57,255,136,.5),rgba(57,255,136,.15))}
+.ctf-road li{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.road-node{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;margin-bottom:8px;color:var(--green);
+  background:var(--bg-alt);border:1px solid rgba(57,255,136,.4)}
+.road-node .ico{width:19px;height:19px}
+.ctf-road li.main .road-node{background:var(--green);color:#05140b;border-color:var(--green);box-shadow:0 0 0 6px rgba(57,255,136,.12)}
+.road-when{font-family:var(--m);font-size:.72rem;letter-spacing:.06em;color:var(--green)}
+.ctf-road strong{font-family:var(--d);font-weight:600;font-size:.98rem}
+.ctf-road small{font-size:.82rem;color:var(--muted);max-width:24ch}
+
+/* category cards: left-aligned for scanning, with the workshop tools that train each category */
 .cats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.cat{border:1px solid var(--line);border-radius:14px;padding:22px 18px;background:var(--bg-2);text-align:center;
-  transition:border-color .2s ease,box-shadow .2s ease}
-.cat:hover{border-color:rgba(57,255,136,.45);box-shadow:0 0 0 1px rgba(57,255,136,.15)}
-.cat .cicon{width:48px;height:48px;margin:0 auto 12px;display:grid;place-items:center;border-radius:12px;
-  background:rgba(57,255,136,.08);border:1px solid rgba(57,255,136,.35);color:var(--green)}
-.cat .cicon .ico{width:22px;height:22px}
-.cat .code{font-family:var(--m);color:var(--green);font-size:.74rem;letter-spacing:.12em}
-.cat h3{font-size:1.05rem;margin:6px 0 4px}
-.cat p{font-size:.84rem;color:var(--muted)}
+.cat{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--bg-2);
+  transition:border-color .2s ease,background-color .2s ease}
+.cat:hover{border-color:rgba(57,255,136,.45);background:var(--bg-3)}
+.cat-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cat .cicon{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;color:var(--green);
+  background:rgba(57,255,136,.08);border:1px solid rgba(57,255,136,.35);transition:background-color .2s ease,color .2s ease}
+.cat:hover .cicon{background:var(--green);color:#05140b}
+.cat .cicon .ico{width:20px;height:20px}
+.cat .code{font-family:var(--m);font-size:.7rem;letter-spacing:.14em;color:var(--green);
+  padding:3px 9px;border-radius:999px;border:1px solid rgba(57,255,136,.35)}
+.cat h3{font-size:1.06rem;font-weight:600;margin-bottom:4px}
+.cat p{font-size:.88rem;color:var(--muted)}
+.cat-practice{margin-top:auto;padding-top:16px}
+.cat-practice .lbl{display:block;font-family:var(--m);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px}
+.cat-practice ul{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.cat-practice li{font-family:var(--m);font-size:.72rem;padding:3px 8px;border-radius:6px;border:1px solid var(--line);color:var(--fg)}
+
+.ctf-cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px 24px;margin-top:36px;
+  padding-top:28px;border-top:1px solid var(--line)}
+.ctf-cta p{display:flex;align-items:center;gap:10px;font-family:var(--d);font-size:1.06rem;font-weight:500}
+.ctf-cta p .ico{width:20px;height:20px;color:var(--green)}
 
 /* ---------- OUTCOMES ---------- */
 .outs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
@@ -699,6 +725,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   .foot-brand{grid-column:1 / -1}
 }
 @media(max-width:720px){
+  .ctf-road{grid-template-columns:1fr;gap:18px}
+  .ctf-road::before{left:21px;right:auto;top:22px;bottom:22px;width:2px;height:auto}
+  .ctf-road li{display:grid;grid-template-columns:44px 1fr;column-gap:14px;align-items:start;text-align:left}
+  .ctf-road .road-node{grid-row:1 / span 3;margin:0}
+  .ctf-road small{max-width:none}
   :root{--nav-h:60px}
   .band{padding-block:64px}
   .hero{padding-block:calc(var(--nav-h) + 12px + 36px) 52px}
@@ -776,7 +807,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   @keyframes blink{50%{opacity:0}}
 }
 @media(prefers-reduced-motion:reduce){
-  .daytab,.daytab::after,.daynum,.btn,.nav-inner,.acard,.cat,.status-pill,.status-pill .ico,.tag,.acard-link .ico{transition:none}
+  .daytab,.daytab::after,.daynum,.btn,.nav-inner,.acard,.cat,.cat .cicon,.status-pill,.status-pill .ico,.tag,.acard-link .ico{transition:none}
   .nav-indicator{transition:opacity .15s linear}
   .row::after,.row .node,.sess h4,.inline-tags li,.brk-pill{transition:none}
   .ars-filter,.ars-lab,.ars-lab .switch,.ars-lab .switch::after,.ars-search input{transition:none}
