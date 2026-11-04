@@ -63,7 +63,8 @@ a{color:var(--accent)}
 .btn-lg{min-height:52px;padding:12px 28px;font-size:1.02rem}
 
 /* ---------- NAVBAR ---------- */
-.nav{position:sticky;top:12px;z-index:var(--z-nav);padding-inline:12px;margin-top:12px}
+/* Fixed over the hero so the hero background runs to the top edge (no flat strip behind the bar). */
+.nav{position:fixed;top:12px;left:0;right:0;z-index:var(--z-nav);padding-inline:12px}
 .nav-inner{max-width:1120px;margin:0 auto;height:var(--nav-h);display:flex;align-items:center;gap:18px;
   padding:0 12px 0 14px;border:1px solid var(--line);border-radius:16px;
   background:rgba(15,23,43,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
@@ -123,7 +124,7 @@ a{color:var(--accent)}
 .shead.center p{margin-inline:auto}
 
 /* ---------- HERO ---------- */
-.hero{padding-block:72px 64px;overflow:hidden;
+.hero{padding-block:calc(var(--nav-h) + 12px + 72px) 64px;overflow:hidden;
   background:
     radial-gradient(900px 520px at 10% -10%, rgba(63,169,245,.14), transparent 60%),
     radial-gradient(800px 600px at 100% 0%, rgba(3,117,188,.2), transparent 55%)}
@@ -351,7 +352,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 @media(max-width:720px){
   :root{--nav-h:60px}
   .band{padding-block:64px}
-  .hero{padding-block:44px 48px}
+  .hero{padding-block:calc(var(--nav-h) + 12px + 40px) 48px}
   .stats{grid-template-columns:1fr 1fr;margin-top:44px}
   .stat:nth-child(2){border-right:none}
   .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
