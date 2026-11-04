@@ -37,7 +37,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   const onSuccess = (s: AuthSession) => {
     // Session is already stored by the form; hand off to the landing page with a welcome banner.
-    navigate(`/?welcome=${mode === 'register' ? 'new' : 'back'}#top`, true)
+    navigate(`/dashboard?welcome=${mode === 'register' ? 'new' : 'back'}`, true)
     void s
   }
 

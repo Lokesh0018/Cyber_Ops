@@ -128,7 +128,7 @@ export function Navbar() {
         <div className="nav-cta">
           {student ? (
             <>
-              <span className="nav-user" title={student.email}>Hi, {student.fullName.split(' ')[0]}</span>
+              <a className="nav-user" href="/profile" onClick={onLinkClick} title="Open your profile">Hi, {student.fullName.split(' ')[0]}</a>
               <button className="btn btn-ghost" type="button" onClick={signOut}><LogoutIcon /> Logout</button>
             </>
           ) : (
@@ -154,9 +154,12 @@ export function Navbar() {
           <ul>{links}</ul>
           <div className="btngroup">
             {student ? (
-              <button className="btn btn-ghost" type="button" onClick={() => { signOut(); close() }}>
-                <LogoutIcon /> Logout ({student.fullName.split(' ')[0]})
-              </button>
+              <>
+                <a className="btn btn-primary" href="/dashboard" onClick={(e) => { close(); onLinkClick(e) }}>Dashboard</a>
+                <button className="btn btn-ghost" type="button" onClick={() => { signOut(); close() }}>
+                  <LogoutIcon /> Logout
+                </button>
+              </>
             ) : (
               <>
                 <a className="btn btn-ghost" href="/login" onClick={(e) => { close(); onLinkClick(e) }}>Login</a>
