@@ -706,19 +706,40 @@ h1.title .title-2{display:block;color:transparent;
 .out:hover .out-link .ico{transform:translateX(3px)}
 
 /* ---------- REGISTER CTA ---------- */
-.cta-card{position:relative;overflow:hidden;border:1px solid rgba(63,169,245,.4);border-radius:22px;
-  padding:clamp(28px,5vw,56px);text-align:center;
-  background:radial-gradient(600px 300px at 50% 0%, rgba(63,169,245,.18), transparent 70%),
-    linear-gradient(180deg,var(--bg-3),var(--bg-2))}
-.cta-card h2{font-size:clamp(1.8rem,4.6vw,2.8rem);font-weight:700}
-.cta-card h2 .g{color:var(--accent)}
-.cta-card > p{color:var(--muted);margin:12px auto 0;max-width:56ch;font-size:1.04rem}
-.includes{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 22px;margin:26px 0 0;padding:0;list-style:none}
-.includes li{display:flex;align-items:center;gap:8px;font-size:.93rem}
-.includes .ico{width:17px;height:17px;color:var(--green)}
-.cta-card .btngroup{justify-content:center;margin-top:30px}
-.seats{display:inline-flex;align-items:center;gap:8px;margin-top:22px;font-family:var(--m);
-  font-size:.8rem;color:var(--green);border:1px solid rgba(57,255,136,.35);padding:6px 12px;border-radius:999px}
+/* Wide, low banner: pitch left, action right, perks in one row underneath. */
+.wrap-wide{max-width:1320px}
+.cta-card{position:relative;overflow:hidden;isolation:isolate;display:grid;grid-template-columns:1fr auto;
+  align-items:center;gap:22px 48px;border:1px solid rgba(63,169,245,.28);border-radius:20px;
+  background:radial-gradient(700px 260px at 0% 0%,rgba(63,169,245,.15),transparent 70%),
+    radial-gradient(520px 240px at 100% 100%,rgba(118,83,232,.09),transparent 70%),
+    linear-gradient(180deg,var(--bg-3),var(--bg-2));
+  box-shadow:0 30px 70px -40px rgba(3,117,188,.7),inset 0 1px 0 rgba(124,200,255,.12);
+  padding:clamp(24px,3.4vw,36px) clamp(20px,4vw,48px)}
+/* glowing hairline along the top edge */
+.cta-card::before{content:"";position:absolute;top:0;left:6%;right:40%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent)}
+/* SHM badge as a faint watermark behind the action column */
+.cta-mark{position:absolute;z-index:-1;right:-60px;top:50%;width:320px;height:320px;transform:translateY(-50%);
+  opacity:.08;filter:grayscale(1) invert(1);mix-blend-mode:screen;pointer-events:none;user-select:none}
+.cta-head{min-width:0}
+.cta-card h2{font-size:clamp(1.6rem,3.2vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+.cta-card h2 .g{color:var(--accent);text-shadow:0 0 24px rgba(63,169,245,.35)}
+.cta-lead{color:var(--muted);margin-top:8px;max-width:60ch;font-size:1rem;line-height:1.6}
+.cta-act{display:flex;flex-direction:column;align-items:center;gap:0}
+.cta-act .btn-primary{padding-inline:36px}
+.cta-login{font-size:.88rem;color:var(--muted)}
+.cta-login a{display:inline-flex;align-items:center;min-height:40px;font-weight:600;
+  text-underline-offset:3px;text-decoration:none}
+.cta-login a:hover{text-decoration:underline}
+.seats{display:inline-flex;align-items:center;gap:8px;margin-bottom:12px;padding:4px 12px;border-radius:999px;
+  font-family:var(--m);font-size:.74rem;letter-spacing:.06em;color:var(--amber);
+  background:rgba(255,179,64,.07);border:1px solid rgba(255,179,64,.28)}
+.seats .dot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.perks{grid-column:1 / -1;display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin:0;padding:20px 0 0;
+  border-top:1px solid rgba(37,55,92,.8);list-style:none;font-size:.86rem;color:var(--fg)}
+.perks li{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  border:1px solid var(--line);background:rgba(12,19,36,.55)}
+.perks .ico{width:15px;height:15px;color:var(--green)}
 
 /* ---------- FOOTER ---------- */
 .foot{border-top:1px solid var(--line);background:var(--bg-alt);padding-block:56px 28px}
@@ -766,6 +787,9 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   .arsenal{grid-template-columns:1fr 1fr}
   .cats{grid-template-columns:1fr 1fr}
   .outcomes{grid-template-columns:1fr;gap:32px}
+  .cta-card{grid-template-columns:1fr;text-align:center}
+  .cta-lead{margin-inline:auto}
+  .perks{justify-content:center}
   .cert{max-width:460px}
   .daybody{grid-template-columns:1fr;grid-template-rows:none}
   .daybody .phase-col{display:block;grid-row:auto}
@@ -809,6 +833,10 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   .phase-range{margin-left:0}
   .brk-pill{flex-wrap:wrap;row-gap:2px}
   .hero .btngroup .btn{flex:1}
+  .cta-act{align-items:stretch}
+  .cta-mark{width:240px;height:240px;right:-80px;top:24px;transform:none}
+  .perks li{width:100%;justify-content:flex-start}
+  .perks{flex-direction:column;gap:8px}
   .term-body{font-size:.72rem;padding:14px 14px 18px}
   .hero-visual{padding:62px 0 62px}
   .hero-meta{gap:8px 18px}
