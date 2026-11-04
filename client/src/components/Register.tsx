@@ -1,5 +1,6 @@
 import logo from '../assets/shm-logo.webp'
 import { included } from '../data/content'
+import { onLinkClick } from '../hooks/useRoute'
 import { ArrowRightIcon, CheckIcon } from './Icons'
 
 export function Register() {
@@ -19,11 +20,11 @@ export function Register() {
           </p>
 
           <div className="cta-act">
-            <a className="btn btn-primary btn-lg" href="#">
+            <a className="btn btn-primary btn-lg" href="/register" onClick={onLinkClick}>
               Register Now <ArrowRightIcon />
             </a>
             <p className="cta-login">
-              Already registered? <a href="#">Log in</a>
+              Already registered? <a href="/login" onClick={onLinkClick}>Log in</a>
             </p>
           </div>
 

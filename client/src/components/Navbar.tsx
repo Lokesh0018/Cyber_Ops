@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import logo from '../assets/shm-logo.webp'
 import { navLinks } from '../data/content'
-import { CloseIcon, MenuIcon } from './Icons'
+import { useAuth } from '../hooks/useAuth'
+import { onLinkClick } from '../hooks/useRoute'
+import { CloseIcon, LogoutIcon, MenuIcon } from './Icons'
 
 /**
  * Returns the nav section under a reference line 40% down the viewport, or null when that line
@@ -97,6 +99,7 @@ export function Navbar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  const { student, signOut } = useAuth()
   const close = () => setOpen(false)
   const links = navLinks.map((l) => (
     <li key={l.id}>
@@ -123,8 +126,17 @@ export function Navbar() {
         </div>
 
         <div className="nav-cta">
-          <a className="btn btn-ghost" href="#">Login</a>
-          <a className="btn btn-primary" href="#register">Register</a>
+          {student ? (
+            <>
+              <span className="nav-user" title={student.email}>Hi, {student.fullName.split(' ')[0]}</span>
+              <button className="btn btn-ghost" type="button" onClick={signOut}><LogoutIcon /> Logout</button>
+            </>
+          ) : (
+            <>
+              <a className="btn btn-ghost" href="/login" onClick={onLinkClick}>Login</a>
+              <a className="btn btn-primary" href="/register" onClick={onLinkClick}>Register</a>
+            </>
+          )}
         </div>
 
         <button
@@ -141,8 +153,16 @@ export function Navbar() {
         <div id="mobile-menu" className={open ? 'nav-menu open' : 'nav-menu'}>
           <ul>{links}</ul>
           <div className="btngroup">
-            <a className="btn btn-ghost" href="#" onClick={close}>Login</a>
-            <a className="btn btn-primary" href="#register" onClick={close}>Register Now</a>
+            {student ? (
+              <button className="btn btn-ghost" type="button" onClick={() => { signOut(); close() }}>
+                <LogoutIcon /> Logout ({student.fullName.split(' ')[0]})
+              </button>
+            ) : (
+              <>
+                <a className="btn btn-ghost" href="/login" onClick={(e) => { close(); onLinkClick(e) }}>Login</a>
+                <a className="btn btn-primary" href="/register" onClick={(e) => { close(); onLinkClick(e) }}>Register Now</a>
+              </>
+            )}
           </div>
         </div>
       </nav>
