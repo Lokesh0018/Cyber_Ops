@@ -3,20 +3,36 @@ import logo from '../assets/shm-logo.webp'
 import { navLinks } from '../data/content'
 import { CloseIcon, MenuIcon } from './Icons'
 
-/** Tracks which section is in the middle band of the viewport. */
+/**
+ * Returns the nav section under a reference line 40% down the viewport, or null when that line
+ * is over anything else (the hero, the register CTA). Recomputed on every scroll, so the
+ * highlight also clears when scrolling back up into the hero.
+ */
 function useActiveSection(ids: string[]) {
   const [active, setActive] = useState<string | null>(null)
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) if (e.isIntersecting) setActive(e.target.id)
-      },
-      { rootMargin: '-45% 0px -50% 0px' },
-    )
-    const els = ids.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el)
-    els.forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const line = window.innerHeight * 0.4
+      const hit = ids.find((id) => {
+        const r = document.getElementById(id)?.getBoundingClientRect()
+        return !!r && r.top <= line && r.bottom > line
+      })
+      setActive(hit ?? null)
+    }
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      cancelAnimationFrame(frame)
+    }
   }, [ids])
 
   return active
