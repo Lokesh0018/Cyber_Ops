@@ -1210,6 +1210,10 @@ html:has(.authpage){scrollbar-gutter:stable}
 .dash-tabs [role=tab]:hover{color:var(--term-text)}
 .dash-tabs [role=tab][aria-selected=true]{background:var(--term-cyan);color:#06101c}
 .dash-tabs [role=tab].violet[aria-selected=true]{background:var(--term-violet);color:#fff}
+/* Stack every day in one grid cell: the card takes the tallest day's height, the hidden day stays in the flow */
+.dash-days{display:grid}
+.dash-day{grid-area:1 / 1;min-width:0}
+.dash-day[hidden]{display:block;visibility:hidden;pointer-events:none}
 .dash-daytitle{margin:4px 0 12px;font-size:.86rem}
 .dash-daytitle b{color:var(--term-text)}
 .dash-phases{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
@@ -1224,22 +1228,6 @@ html:has(.authpage){scrollbar-gutter:stable}
 .dash-phase li.brk{color:var(--term-dim)}
 .dash-phase li.brk .dash-time,.dash-phase li.brk .dash-sess{color:var(--term-dim)}
 .dash-phase li.violet .dash-time{color:var(--term-violet)}
-/* ctf */
-.dash-ctf{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.dash-ctf li{display:flex;align-items:center;gap:12px}
-.dash-ctf code{flex-shrink:0;min-width:56px;text-align:center;padding:3px 8px;border-radius:6px;border:1px solid var(--term-border);
-  background:rgba(0,184,255,.06);color:var(--term-cyan);font-size:.72rem;letter-spacing:.1em}
-.dash-ctf b{display:block;color:var(--term-text);font-weight:600}
-.dash-ctf small{display:block;color:var(--term-muted);font-size:.78rem;line-height:1.4}
-/* quick links */
-.dash-links{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.dash-links a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 12px;border-radius:9px;
-  border:1px solid transparent;color:var(--term-text);text-decoration:none;transition:border-color .2s ease,background-color .2s ease}
-.dash-links a:hover{border-color:var(--term-border);background:rgba(0,184,255,.05)}
-.dash-links a:hover .ico{transform:translateX(3px)}
-.dash-links b{display:block;font-weight:600}
-.dash-links small{display:block;color:var(--term-muted);font-size:.78rem;line-height:1.4}
-.dash-links .ico{width:16px;height:16px;color:var(--term-cyan);flex-shrink:0;transition:transform .2s ease}
 
 @media(max-width:900px){
   .dash-grid{grid-template-columns:1fr}

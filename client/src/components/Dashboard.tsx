@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ctfCategories, schedule } from '../data/content'
+import { schedule } from '../data/content'
 import { ConsoleLayout } from './ConsoleLayout'
 import { Leaderboard } from './Leaderboard'
-import { ArrowRightIcon, CheckIcon, TrophyIcon } from './Icons'
-
-const quickLinks = [
-  { href: '/#arsenal', label: 'Tool arsenal', desc: '100+ Kali tools you will use' },
-  { href: '/#schedule', label: 'Full schedule', desc: 'Both days, session by session' },
-  { href: '/#autovapt', label: 'SHM AutoVAPT', desc: 'Day-2 automated scanner demo' },
-  { href: '/#ctf', label: 'CTF finale', desc: 'Format, categories and scoring' },
-]
+import { CheckIcon } from './Icons'
 
 /** Student dashboard at /dashboard (session guard + top bar come from ConsoleLayout). */
 export function Dashboard() {
@@ -57,49 +50,35 @@ export function Dashboard() {
                 ))}
               </div>
             </div>
-            <p className="dash-daytitle"><b>{schedule[day].title}</b> <span className="tmuted">· {schedule[day].meta}</span></p>
-            <div className="dash-phases">
-              {schedule[day].phases.map((ph) => (
-                <div className="dash-phase" key={ph.label}>
-                  <h3>{ph.label}</h3>
-                  <ul>
-                    {ph.sessions.map((s) => (
-                      <li key={s.time + s.title} className={s.breakKind ? 'brk' : s.violet ? 'violet' : ''}>
-                        <span className="dash-time">{s.time}</span>
-                        <span className="dash-sess">
-                          {s.title}
-                          {s.tools && <span className="dash-tools">{s.tools.join(' · ')}</span>}
-                        </span>
-                      </li>
+            {/* Both days are laid out in the same grid cell so the card keeps the taller day's height; only the
+                visible one changes when the tab switches. */}
+            <div className="dash-days">
+              {schedule.map((d, i) => (
+                <div key={d.num} className="dash-day" hidden={i !== day ? true : undefined} aria-hidden={i !== day}>
+                  <p className="dash-daytitle"><b>{d.title}</b> <span className="tmuted">· {d.meta}</span></p>
+                  <div className="dash-phases">
+                    {d.phases.map((ph) => (
+                      <div className="dash-phase" key={ph.label}>
+                        <h3>{ph.label}</h3>
+                        <ul>
+                          {ph.sessions.map((s) => (
+                            <li key={s.time + s.title} className={s.breakKind ? 'brk' : s.violet ? 'violet' : ''}>
+                              <span className="dash-time">{s.time}</span>
+                              <span className="dash-sess">
+                                {s.title}
+                                {s.tools && <span className="dash-tools">{s.tools.join(' · ')}</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* CTF */}
-          <section className="dcard" aria-labelledby="d-ctf">
-            <h2 id="d-ctf" className="dcard-h"><span className="tp-dollar">$</span> ls ctf/</h2>
-            <ul className="dash-ctf">
-              {ctfCategories.map((c) => (
-                <li key={c.code}><code>{c.code}</code><span><b>{c.title}</b><small>{c.desc}</small></span></li>
-              ))}
-            </ul>
-            <p className="dash-note"><TrophyIcon /><span>Scoreboard goes live on day 2 — flags are earned, not given.</span></p>
-          </section>
-
-          {/* Quick links */}
-          <section className="dcard" aria-labelledby="d-links">
-            <h2 id="d-links" className="dcard-h"><span className="tp-dollar">$</span> ls docs/</h2>
-            <ul className="dash-links">
-              {quickLinks.map((l) => (
-                <li key={l.href}>
-                  <a href={l.href}><span><b>{l.label}</b><small>{l.desc}</small></span><ArrowRightIcon /></a>
-                </li>
-              ))}
-            </ul>
-          </section>
         </div>
           </>
         )
