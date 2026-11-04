@@ -6,7 +6,8 @@ export interface Student {
   email: string
   phone: string
   institution: string
-  level: string
+  branch: string
+  rollNumber: string
   createdAt: string
 }
 

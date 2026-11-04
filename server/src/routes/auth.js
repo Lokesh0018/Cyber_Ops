@@ -1,13 +1,13 @@
 import { Router } from 'express'
 import { pool } from '../config/db.js'
-import { hashPassword, verifyPassword } from '../lib/password.js'
 import { issueToken, requireAuth } from '../lib/token.js'
 
 const router = Router()
 
-export const LEVELS = ['Student', 'Fresher', 'Working professional', 'Educator']
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const PHONE_RE = /^\+?[0-9][0-9\s-]{7,18}$/
+const PHONE_RE = /^[0-9]{10}$/ // 10-digit mobile number, no country code
+const ROLL_RE = /^[A-Za-z0-9\-\/]{3,30}$/ // college roll number: letters, digits, - and /
+const normRoll = (v) => String(v ?? '').trim().toUpperCase()
 
 const publicStudent = (row) => ({
   id: row.id,
@@ -15,7 +15,8 @@ const publicStudent = (row) => ({
   email: row.email,
   phone: row.phone,
   institution: row.institution,
-  level: row.level,
+  branch: row.branch,
+  rollNumber: row.roll_number,
   createdAt: row.created_at,
 })
 
@@ -24,10 +25,10 @@ function validateRegistration(b) {
   const errors = {}
   if (!b.fullName || b.fullName.trim().length < 2) errors.fullName = 'Enter your full name.'
   if (!EMAIL_RE.test(b.email ?? '')) errors.email = 'Enter a valid email address.'
-  if (!PHONE_RE.test(b.phone ?? '')) errors.phone = 'Enter a valid phone number.'
+  if (!PHONE_RE.test(b.phone ?? '')) errors.phone = 'Enter a 10-digit mobile number.'
   if (!b.institution || b.institution.trim().length < 2) errors.institution = 'Enter your college or organisation.'
-  if (!LEVELS.includes(b.level)) errors.level = 'Choose an option.'
-  if (!b.password || b.password.length < 8) errors.password = 'Use at least 8 characters.'
+  if (!b.branch || b.branch.trim().length < 2) errors.branch = 'Enter your branch / department.'
+  if (!ROLL_RE.test(normRoll(b.rollNumber))) errors.rollNumber = 'Enter your roll number (3–30 letters/digits).'
   return errors
 }
 
@@ -44,10 +45,9 @@ router.post('/register', async (req, res, next) => {
       return res.status(409).json({ message: 'This email is already registered.', errors: { email: 'Already registered — try logging in.' } })
     }
 
-    const passwordHash = await hashPassword(b.password)
     const [result] = await pool.query(
-      'INSERT INTO students (full_name, email, phone, institution, level, password_hash) VALUES (?, ?, ?, ?, ?, ?)',
-      [b.fullName.trim(), email, b.phone.trim(), b.institution.trim(), b.level, passwordHash],
+      'INSERT INTO students (full_name, email, phone, institution, branch, roll_number) VALUES (?, ?, ?, ?, ?, ?)',
+      [b.fullName.trim(), email, b.phone.trim(), b.institution.trim(), b.branch.trim(), normRoll(b.rollNumber)],
     )
     const [[row]] = await pool.query('SELECT * FROM students WHERE id = ?', [result.insertId])
     res.status(201).json({ token: issueToken(row.id), student: publicStudent(row) })
@@ -56,18 +56,18 @@ router.post('/register', async (req, res, next) => {
   }
 })
 
-// POST /api/auth/login
+// POST /api/auth/login — registered email + roll number
 router.post('/login', async (req, res, next) => {
   try {
     const email = String(req.body?.email ?? '').trim().toLowerCase()
-    const password = String(req.body?.password ?? '')
-    if (!EMAIL_RE.test(email) || !password) {
-      return res.status(422).json({ message: 'Enter your email and password.' })
+    const roll = normRoll(req.body?.rollNumber)
+    if (!EMAIL_RE.test(email) || !roll) {
+      return res.status(422).json({ message: 'Enter your email and roll number.' })
     }
     const [[row]] = await pool.query('SELECT * FROM students WHERE email = ? LIMIT 1', [email])
-    // Same message for unknown email and wrong password, so accounts can't be enumerated.
-    if (!row || !(await verifyPassword(password, row.password_hash))) {
-      return res.status(401).json({ message: 'Incorrect email or password.' })
+    // Same message for unknown email and wrong roll number, so accounts can't be enumerated.
+    if (!row || row.roll_number !== roll) {
+      return res.status(401).json({ message: 'Email and roll number don’t match our records.' })
     }
     res.json({ token: issueToken(row.id), student: publicStudent(row) })
   } catch (err) {
