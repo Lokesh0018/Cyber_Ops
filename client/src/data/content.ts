@@ -1,7 +1,10 @@
 export type Accent = 'accent' | 'brand-2' | 'magenta' | 'amber' | 'violet'
 
+export type ToolGroup = 'recon' | 'offensive' | 'forensics' | 'inhouse'
+
 export interface ToolCategory {
   title: string
+  group: ToolGroup
   count: string
   accent: Accent
   tools: string[]
@@ -12,54 +15,63 @@ export interface ToolCategory {
 export const arsenal: ToolCategory[] = [
   {
     title: 'OSINT & Recon',
+    group: 'recon',
     count: '13',
     accent: 'accent',
     tools: ['OSINT Framework', 'Maltego', 'SpiderFoot', 'Recon-ng', 'theHarvester', 'Amass', 'Sublist3r', 'Shodan', 'httpx', 'Katana', 'Gobuster', 'WhatWeb', 'ffuf'],
   },
   {
     title: 'Web Exploitation',
+    group: 'offensive',
     count: '10',
     accent: 'magenta',
     tools: ['Burp Suite Pro', 'OWASP ZAP', 'SQLmap', 'Nuclei', 'XSStrike', 'Commix', 'WPScan', 'Nikto', 'dirsearch', 'wfuzz'],
   },
   {
     title: 'Network & Scanning',
+    group: 'recon',
     count: '09',
     accent: 'brand-2',
     tools: ['Nmap', 'Masscan', 'Wireshark', 'tcpdump', 'Netcat', 'Responder', 'Bettercap', 'NetExec', 'Tshark'],
   },
   {
     title: 'Exploitation & C2',
+    group: 'offensive',
     count: '08',
     accent: 'magenta',
     tools: ['Metasploit', 'Sliver C2', 'Empire', 'Havoc', 'Impacket', 'searchsploit', 'Weevely', 'msfvenom'],
   },
   {
     title: 'Password Cracking',
+    group: 'offensive',
     count: '07',
     accent: 'amber',
     tools: ['Hashcat', 'John the Ripper', 'Hydra', 'Medusa', 'hashid', 'CeWL', 'Crunch'],
   },
   {
     title: 'Wireless Attacks',
+    group: 'offensive',
     count: '06',
     accent: 'accent',
     tools: ['Aircrack-ng', 'Wifite', 'Kismet', 'Reaver', 'Bettercap', 'hcxdumptool'],
   },
   {
     title: 'Privilege Escalation',
+    group: 'offensive',
     count: '06',
     accent: 'amber',
     tools: ['LinPEAS', 'WinPEAS', 'GTFOBins', 'pspy', 'linux-exploit-suggester', 'PowerUp'],
   },
   {
     title: 'Forensics & Stego',
+    group: 'forensics',
     count: '08',
     accent: 'amber',
     tools: ['Autopsy', 'Volatility', 'Steghide', 'ExifTool', 'CyberChef', 'zsteg', 'Binwalk', 'foremost'],
   },
   {
     title: 'SHM AutoVAPT',
+    group: 'inhouse',
     count: '★',
     accent: 'violet',
     tools: ['Our in-house', 'automated engine', 'OWASP-mapped report'],

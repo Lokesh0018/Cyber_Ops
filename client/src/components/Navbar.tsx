@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import logo from '../assets/shm-logo.webp'
 import { navLinks } from '../data/content'
 import { CloseIcon, MenuIcon } from './Icons'
@@ -40,10 +40,48 @@ function useActiveSection(ids: string[]) {
 
 const ids = navLinks.map((l) => l.id)
 
+interface Indicator {
+  x: number
+  w: number
+  show: boolean
+  /** Skip the slide when appearing from nothing, so it fades in place rather than sweeping in from 0. */
+  instant: boolean
+}
+
+/** Positions a single highlight under the active desktop link; it slides between links on change. */
+function useIndicator(active: string | null) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [ind, setInd] = useState<Indicator>({ x: 0, w: 0, show: false, instant: true })
+
+  useLayoutEffect(() => {
+    const measure = (fromResize = false) => {
+      const wrap = wrapRef.current
+      const link = active ? wrap?.querySelector<HTMLElement>(`a[href="#${active}"]`) : null
+      if (!wrap || !link) {
+        setInd((prev) => ({ ...prev, show: false }))
+        return
+      }
+      const w = wrap.getBoundingClientRect()
+      const r = link.getBoundingClientRect()
+      setInd((prev) => ({ x: r.left - w.left, w: r.width, show: true, instant: fromResize || !prev.show }))
+    }
+    measure()
+    const onResize = () => measure(true)
+    window.addEventListener('resize', onResize)
+    document.fonts?.ready.then(() => measure(true))
+    return () => window.removeEventListener('resize', onResize)
+  }, [active])
+
+  const style = { '--x': `${ind.x}px`, '--w': `${ind.w}px` } as CSSProperties
+  const className = ['nav-indicator', ind.show && 'show', ind.instant && 'instant'].filter(Boolean).join(' ')
+  return { wrapRef, style, className }
+}
+
 export function Navbar() {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const active = useActiveSection(ids)
+  const indicator = useIndicator(active)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -79,7 +117,10 @@ export function Navbar() {
           </span>
         </a>
 
-        <ul className="nav-links">{links}</ul>
+        <div className="nav-links-wrap" ref={indicator.wrapRef}>
+          <span className={indicator.className} style={indicator.style} aria-hidden="true" />
+          <ul className="nav-links">{links}</ul>
+        </div>
 
         <div className="nav-cta">
           <a className="btn btn-ghost" href="#">Login</a>

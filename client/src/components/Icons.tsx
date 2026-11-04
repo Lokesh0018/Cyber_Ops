@@ -29,3 +29,8 @@ export const RadarIcon = icon(<><path d="M19.07 4.93A10 10 0 1022 12" /><path d=
 export const BugIcon = icon(<><rect x="8" y="6" width="8" height="14" rx="4" /><path d="M19 7l-3 2M5 7l3 2M19 19l-3-2M5 19l3-2M20 13h-4M4 13h4M10 4l1 2M14 4l-1 2" /></>)
 export const ServerIcon = icon(<><rect x="2" y="3" width="20" height="8" rx="2" /><rect x="2" y="13" width="20" height="8" rx="2" /><path d="M6 7h.01M6 17h.01" /></>)
 export const FileIcon = icon(<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></>)
+export const KeyIcon = icon(<><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3L21 2M16 7l3 3M18 5l2 2" /></>)
+export const WifiIcon = icon(<path d="M5 12.55a11 11 0 0114 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01" />)
+export const ChevronsUpIcon = icon(<path d="M17 11l-5-5-5 5M17 18l-5-5-5 5" />)
+export const FingerprintIcon = icon(<path d="M12 10a2 2 0 00-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88M17.29 21.02c.12-.6.43-2.3.5-3.02M2 12a10 10 0 0118-6M2 16h.01M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 01.34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 019 5.2v2" />)
+export const PlusIcon = icon(<path d="M12 5v14M5 12h14" />)
