@@ -79,8 +79,10 @@ function HeroVisual() {
 }
 
 export function Hero() {
+  // Continuous hero effects (cursor, status dots, floating cards) run only while the section is on screen.
+  const { ref, inView } = useInView<HTMLElement>(0.15)
   return (
-    <section className="band hero" id="top" aria-labelledby="hero-title">
+    <section className={inView ? 'band hero on' : 'band hero'} id="top" aria-labelledby="hero-title" ref={ref}>
       <div className="hero-bg" aria-hidden="true">
         <div className="hero-kali" />
         <div className="hero-grid-lines" />
