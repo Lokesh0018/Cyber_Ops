@@ -1,5 +1,7 @@
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { schedule, type Day, type Session } from '../data/content'
 import { CoffeeIcon, TrophyIcon, UtensilsIcon } from './Icons'
+import { SectionHeader } from './SectionHeader'
 
 function SessionRow({ s }: { s: Session }) {
   const cls = ['row', s.violet && 'v', s.breakKind && 'brk'].filter(Boolean).join(' ')
@@ -31,19 +33,16 @@ function SessionRow({ s }: { s: Session }) {
   )
 }
 
-function DayCard({ day }: { day: Day }) {
+function DayPanel({ day }: { day: Day }) {
   return (
     <div className="daycard">
       <div className={day.violet ? 'dayhead v' : 'dayhead'}>
-        <div className={day.violet ? 'daynum v' : 'daynum'}>{day.num}</div>
-        <div>
-          <h3>{day.title}</h3>
-          <p>{day.meta}</p>
-        </div>
+        <h3>Day {day.num} · {day.title}</h3>
+        <p>{day.meta}</p>
       </div>
       <div className="daybody">
         {day.phases.map((phase) => (
-          <div key={phase.label}>
+          <div className="phase-col" key={phase.label}>
             <div className="phase">{phase.label}</div>
             {phase.sessions.map((s) => (
               <SessionRow key={s.time} s={s} />
@@ -56,14 +55,65 @@ function DayCard({ day }: { day: Day }) {
 }
 
 export function Schedule() {
+  const [selected, setSelected] = useState(0)
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+    if (!step) return
+    e.preventDefault()
+    const next = (selected + step + schedule.length) % schedule.length
+    setSelected(next)
+    tabRefs.current[next]?.focus()
+  }
+
   return (
-    <section aria-labelledby="schedule-title">
-      <div className="eyebrow">The Schedule</div>
-      <h2 className="sec" id="schedule-title">Two days, built for momentum</h2>
-      <p className="sec-lead">Theory in the morning, hands-on in the afternoon — then prove it on the flags.</p>
-      {schedule.map((day) => (
-        <DayCard key={day.num} day={day} />
-      ))}
+    <section className="band" id="schedule" aria-labelledby="schedule-title">
+      <div className="wrap">
+        <SectionHeader
+          id="schedule-title"
+          eyebrow="The Schedule"
+          title={<>Two days, built for <span className="g">momentum</span></>}
+          lead="Theory in the morning, hands-on in the afternoon — then prove it on the flags."
+        />
+
+        <div className="daytabs" role="tablist" aria-label="Workshop days" onKeyDown={onKeyDown}>
+          {schedule.map((day, i) => (
+            <button
+              key={day.num}
+              ref={(el) => {
+                tabRefs.current[i] = el
+              }}
+              className={day.violet ? 'daytab v' : 'daytab'}
+              role="tab"
+              type="button"
+              id={`day-tab-${day.num}`}
+              aria-selected={selected === i}
+              aria-controls={`day-panel-${day.num}`}
+              tabIndex={selected === i ? 0 : -1}
+              onClick={() => setSelected(i)}
+            >
+              <span className={day.violet ? 'daynum v' : 'daynum'}>{day.num}</span>
+              <span>
+                <strong>{day.title}</strong>
+                <small>{day.meta.split(' · ')[0]}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {schedule.map((day, i) => (
+          <div
+            key={day.num}
+            role="tabpanel"
+            id={`day-panel-${day.num}`}
+            aria-labelledby={`day-tab-${day.num}`}
+            hidden={selected !== i}
+          >
+            <DayPanel day={day} />
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

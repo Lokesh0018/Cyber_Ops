@@ -223,3 +223,26 @@ export const outcomes = [
 ]
 
 export const contactEmail = 'shmtechnologies77@gmail.com'
+
+export const navLinks = [
+  { id: 'arsenal', label: 'Arsenal' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'autovapt', label: 'AutoVAPT' },
+  { id: 'ctf', label: 'CTF' },
+  { id: 'outcomes', label: 'Outcomes' },
+]
+
+export const heroStats = [
+  { num: '2', label: 'Immersive days' },
+  { num: '16+', label: 'Hours hands-on' },
+  { num: '100+', label: 'Kali Linux tools' },
+  { num: '4', label: 'CTF categories' },
+]
+
+export const included = [
+  '2 days of hands-on labs',
+  'Kali Linux lab environment',
+  'Live SHM AutoVAPT session',
+  'CTF competition & awards',
+  'Certificate of completion',
+]

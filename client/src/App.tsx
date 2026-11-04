@@ -1,23 +1,28 @@
 import { Arsenal } from './components/Arsenal'
+import { Ctf } from './components/Ctf'
+import { Footer } from './components/Footer'
 import { Hero } from './components/Hero'
+import { Navbar } from './components/Navbar'
+import { Outcomes } from './components/Outcomes'
+import { Register } from './components/Register'
 import { Schedule } from './components/Schedule'
-import { Ctf, Footer, Outcomes, Spotlight } from './components/Sections'
+import { Spotlight } from './components/Spotlight'
 
 export default function App() {
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
-      <div className="wrap">
+      <Navbar />
+      <main id="main">
         <Hero />
-        <main id="main">
-          <Arsenal />
-          <Schedule />
-          <Spotlight />
-          <Ctf />
-          <Outcomes />
-        </main>
-        <Footer />
-      </div>
+        <Arsenal />
+        <Schedule />
+        <Spotlight />
+        <Ctf />
+        <Outcomes />
+        <Register />
+      </main>
+      <Footer />
     </>
   )
 }
