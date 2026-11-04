@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node --watch --env-file=.env src/index.js",
     "start": "node --env-file=.env src/index.js",
-    "db:init": "node --env-file=.env src/config/initDb.js"
+    "db:init": "node --env-file=.env src/config/initDb.js",
+    "db:seed": "node --env-file=.env src/config/seed.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { ctfCategories, included, schedule } from '../data/content'
+import { useEffect, useState } from 'react'
+import { ctfCategories, schedule } from '../data/content'
 import { ConsoleLayout } from './ConsoleLayout'
+import { Leaderboard } from './Leaderboard'
 import { ArrowRightIcon, CheckIcon, TrophyIcon } from './Icons'
 
 const quickLinks = [
@@ -41,30 +42,8 @@ export function Dashboard() {
         </div>
 
         <div className="dash-grid">
-          {/* Profile */}
-          <section className="dcard" aria-labelledby="d-profile">
-            <h2 id="d-profile" className="dcard-h"><span className="tp-dollar">$</span> whoami</h2>
-            <dl className="dash-dl">
-              <div><dt>Name</dt><dd>{student.fullName}</dd></div>
-              <div><dt>Email</dt><dd>{student.email}</dd></div>
-              <div><dt>Mobile</dt><dd>{student.phone}</dd></div>
-              <div><dt>Institution</dt><dd>{student.institution}</dd></div>
-              <div><dt>Branch</dt><dd>{student.branch || '—'}</dd></div>
-              <div><dt>Roll number</dt><dd>{student.rollNumber || '—'}</dd></div>
-            </dl>
-            <p className="dash-note tmuted">Need a correction? Email <a href="mailto:shmtechnologies77@gmail.com">shmtechnologies77@gmail.com</a> from this address.</p>
-          </section>
-
-          {/* Enrollment checklist */}
-          <section className="dcard" aria-labelledby="d-included">
-            <h2 id="d-included" className="dcard-h"><span className="tp-dollar">$</span> cat enrollment.txt</h2>
-            <ul className="dash-check">
-              {included.map((item, i) => (
-                <li key={item} style={{ '--i': i } as CSSProperties}><b>[✓]</b> {item}</li>
-              ))}
-            </ul>
-            <p className="dash-note tmuted">Bring a laptop that can run a VM (8 GB RAM recommended). Kali lab images are provided on the day.</p>
-          </section>
+          {/* Scoreboard: top 10 performers */}
+          <Leaderboard />
 
           {/* Agenda */}
           <section className="dcard dcard-wide" aria-labelledby="d-agenda">

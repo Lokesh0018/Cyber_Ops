@@ -8,6 +8,7 @@ export interface Student {
   institution: string
   branch: string
   rollNumber: string
+  score: number
   createdAt: string
 }
 

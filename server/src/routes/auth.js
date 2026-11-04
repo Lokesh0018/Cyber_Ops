@@ -17,6 +17,7 @@ const publicStudent = (row) => ({
   institution: row.institution,
   branch: row.branch,
   rollNumber: row.roll_number,
+  score: row.score ?? 0,
   createdAt: row.created_at,
 })
 
@@ -81,6 +82,34 @@ router.get('/me', requireAuth, async (req, res, next) => {
     const [[row]] = await pool.query('SELECT * FROM students WHERE id = ? LIMIT 1', [req.studentId])
     if (!row) return res.status(401).json({ message: 'Please log in.' })
     res.json({ student: publicStudent(row) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET /api/auth/leaderboard — full ranking, the caller's rank, and score-over-time series for the top 10.
+// Scores come from score_events (awarded by organisers); students.score holds the running total.
+router.get('/leaderboard', requireAuth, async (req, res, next) => {
+  try {
+    const [all] = await pool.query(
+      'SELECT id, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC',
+    )
+    const top = all.slice(0, 10)
+    const meRow = all.find((r) => r.id === req.studentId)
+    const rank = meRow ? all.findIndex((r) => r.id === req.studentId) + 1 : all.length
+    let series = []
+    if (top.length) {
+      const [events] = await pool.query(
+        'SELECT student_id, points, created_at FROM score_events WHERE student_id IN (?) ORDER BY created_at ASC, id ASC',
+        [top.map((r) => r.id)],
+      )
+      series = top.map((r) => {
+        let running = 0
+        const points = events.filter((e) => e.student_id === r.id).map((e) => ({ t: e.created_at, score: (running += e.points) }))
+        return { id: r.id, name: r.name, points }
+      })
+    }
+    res.json({ all, top, series, me: { id: req.studentId, score: meRow?.score ?? 0, rank, total: all.length } })
   } catch (err) {
     next(err)
   }
