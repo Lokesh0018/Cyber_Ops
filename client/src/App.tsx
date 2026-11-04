@@ -16,8 +16,14 @@ export default function App() {
       <main id="main">
         <Hero />
         <Arsenal />
-        <Schedule />
-        <Spotlight />
+        {/* Schedule + Spotlight share one fixed Kali watermark that stays put while scrolling through both */}
+        <div className="kali-zone">
+          <div className="kali-zone-bg" aria-hidden="true">
+            <div className="kali-watermark" />
+          </div>
+          <Schedule />
+          <Spotlight />
+        </div>
         <Ctf />
         <Outcomes />
         <Register />

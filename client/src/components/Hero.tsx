@@ -10,6 +10,7 @@ import {
   ShieldIcon,
   TrophyIcon,
 } from './Icons'
+import { useInView } from '../hooks/useInView'
 
 const meta = [
   { Icon: ShieldIcon, label: 'Beginner → Advanced' },
@@ -27,9 +28,11 @@ const lines = [
   <><span className="o">[*] CTF scoreboard live — capture the flag.</span></>,
 ]
 
+// Replays the line-by-line reveal each time the terminal scrolls back into view.
 function HeroVisual() {
+  const { ref, inView } = useInView<HTMLDivElement>(0.3)
   return (
-    <div className="hero-visual" aria-hidden="true">
+    <div className={inView ? 'hero-visual run' : 'hero-visual'} ref={ref} aria-hidden="true">
       <div className="hv-orb" />
       <div className="term">
         <span className="hud tl" /><span className="hud tr" /><span className="hud bl" /><span className="hud br" />
