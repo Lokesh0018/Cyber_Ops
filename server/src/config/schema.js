@@ -30,6 +30,31 @@ export async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
 
+  // CTF flags (answers stored as SHA-256 of the normalised flag) and every submission attempt.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS flags (
+      id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      title        VARCHAR(80)  NOT NULL UNIQUE,
+      points       INT          NOT NULL,
+      answer_hash  CHAR(64)     NOT NULL,
+      question_url VARCHAR(300) NOT NULL DEFAULT '',
+      sort_order   INT          NOT NULL DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS submissions (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      student_id INT UNSIGNED NOT NULL,
+      flag_id    INT UNSIGNED NOT NULL,
+      answer     VARCHAR(200) NOT NULL,
+      correct    TINYINT(1)   NOT NULL DEFAULT 0,
+      created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX (student_id, flag_id),
+      CONSTRAINT fk_sub_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+      CONSTRAINT fk_sub_flag FOREIGN KEY (flag_id) REFERENCES flags(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+
   // Migration for tables created before branch/roll number replaced the password.
   const [cols] = await pool.query(
     'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',

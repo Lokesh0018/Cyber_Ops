@@ -3,6 +3,7 @@ import express from 'express'
 import { checkConnection } from './config/db.js'
 import { ensureSchema } from './config/schema.js'
 import authRouter from './routes/auth.js'
+import flagsRouter from './routes/flags.js'
 import healthRouter from './routes/health.js'
 
 const app = express()
@@ -13,6 +14,7 @@ app.use(express.json())
 
 app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/flags', flagsRouter)
 
 // Central error handler: log the stack, return a safe message
 app.use((err, _req, res, _next) => {

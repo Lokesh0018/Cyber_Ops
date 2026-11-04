@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { SCORE_EVENT } from './FlagBoard'
 
 interface Row { id: number; name: string; institution: string; score: number }
 interface Series { id: number; name: string; points: { t: string; score: number }[] }
@@ -10,6 +11,7 @@ const HUES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', 
 const styleFor = (i: number) => ({ color: HUES[i % HUES.length], dash: i >= HUES.length ? '6 4' : undefined })
 
 const fmtTime = (d: Date) => d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+const POLL_MS = 10_000
 const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 
 /**
@@ -25,6 +27,22 @@ export function Leaderboard() {
   const [query, setQuery] = useState('')
   const svgRef = useRef<SVGSVGElement>(null)
 
+  const [tick, setTick] = useState(0)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  // Live board: re-fetch right after one of our own flags is accepted (SCORE_EVENT), and poll every
+  // POLL_MS so other students' captures appear too. Polling pauses while the tab is hidden.
+  useEffect(() => {
+    const bump = () => setTick((t) => t + 1)
+    window.addEventListener(SCORE_EVENT, bump)
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') bump() }, POLL_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') bump() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener(SCORE_EVENT, bump)
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
   useEffect(() => {
     if (!session) return
     let cancelled = false
@@ -33,10 +51,10 @@ export function Leaderboard() {
         if (!r.ok) throw new Error('Scoreboard unavailable right now.')
         return (await r.json()) as Board
       })
-      .then((b) => !cancelled && setBoard(b))
-      .catch((e: Error) => !cancelled && setError(e.message))
+      .then((b) => { if (!cancelled) { setBoard(b); setError(''); setUpdatedAt(new Date()) } })
+      .catch((e: Error) => !cancelled && !board && setError(e.message)) // keep the last good board on a transient failure
     return () => { cancelled = true }
-  }, [session])
+  }, [session, tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- chart model: every series starts at 0 at the first event time and holds its last value to the end
   const model = useMemo(() => {
@@ -48,6 +66,7 @@ export function Leaderboard() {
     }))
     const times = series.flatMap((s) => s.pts.map((p) => p.t))
     if (!times.length) return null
+    // One continuous axis from the first capture to the latest (at least a minute wide).
     const t0 = Math.min(...times), t1 = Math.max(...times)
     const span = Math.max(t1 - t0, 60_000)
     const max = Math.max(10, ...series.flatMap((s) => s.pts.map((p) => p.score)))
@@ -58,6 +77,8 @@ export function Leaderboard() {
   const W = 720, H = 260, L = 48, R = 16, T = 12, B = 30
   const pw = W - L - R, ph = H - T - B
   const x = (t: number) => model ? L + ((t - model.t0) / model.span) * pw : L
+  /** x → time (inverse of x, for the hover crosshair). */
+  const tAt = (px: number) => model ? model.t0 + Math.min(1, Math.max(0, (px - L) / pw)) * model.span : 0
   const y = (v: number) => model ? T + ph - (v / model.max) * ph : T + ph
   const path = (pts: { t: number; score: number }[]) => {
     if (!model) return ''
@@ -87,8 +108,7 @@ export function Leaderboard() {
     if (!model || !svgRef.current) return
     const rect = svgRef.current.getBoundingClientRect()
     const px = ((e.clientX - rect.left) / rect.width) * W
-    const t = model.t0 + Math.min(1, Math.max(0, (px - L) / pw)) * model.span
-    setCursor(t)
+    setCursor(tAt(px))
   }
 
   const rows = board?.all ?? []
@@ -113,7 +133,10 @@ export function Leaderboard() {
 
       {board && (
         <>
-          <h3 className="lb-sub">Top {model?.series.length ?? 0} users</h3>
+          <h3 className="lb-sub">
+            Top {model?.series.length ?? 0} users
+            {updatedAt && <span className="lb-live"><span className="dot" aria-hidden="true" /> live · updated {updatedAt.toLocaleTimeString('en-IN', { hour12: false })}</span>}
+          </h3>
           {!hasScores && <p className="lb-empty"><b>[*]</b> No scores yet — the chart fills in as flags are captured on day 2.</p>}
 
           {model && (
@@ -133,8 +156,8 @@ export function Leaderboard() {
                     <text x={L - 8} y={y(v)} className="lb-tick lb-tick-y">{v.toLocaleString('en-IN')}</text>
                   </g>
                 ))}
-                {xTicks.map((t) => (
-                  <text key={t} x={x(t)} y={H - 8} className="lb-tick lb-tick-x">{fmtTime(new Date(t))}</text>
+                {xTicks.map((t, i) => (
+                  <text key={t} x={x(t)} y={H - 8} className={`lb-tick lb-tick-x ${i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : ''}`}>{fmtTime(new Date(t))}</text>
                 ))}
                 <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} className="lb-axis" />
 

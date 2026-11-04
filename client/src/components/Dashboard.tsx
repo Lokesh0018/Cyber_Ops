@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { schedule } from '../data/content'
 import { ConsoleLayout } from './ConsoleLayout'
+import { FlagBoard } from './FlagBoard'
 import { Leaderboard } from './Leaderboard'
 import { CheckIcon } from './Icons'
 
@@ -78,6 +79,9 @@ export function Dashboard() {
               ))}
             </div>
           </section>
+
+          {/* CTF flag submission */}
+          <FlagBoard />
 
         </div>
           </>
