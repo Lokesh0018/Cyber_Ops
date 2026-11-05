@@ -66,4 +66,11 @@ export async function ensureSchema() {
   if (!have.has('score')) await pool.query('ALTER TABLE students ADD COLUMN score INT NOT NULL DEFAULT 0 AFTER roll_number') // CTF score, set by organisers
   if (have.has('password_hash')) await pool.query('ALTER TABLE students DROP COLUMN password_hash')
   if (have.has('level')) await pool.query('ALTER TABLE students DROP COLUMN level') // role field removed
+
+  // Flags keep the plaintext answer alongside the hash so organisers can read and edit it in the admin console.
+  const [fcols] = await pool.query(
+    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+    ['flags'],
+  )
+  if (!fcols.some((c) => c.COLUMN_NAME === 'answer')) await pool.query("ALTER TABLE flags ADD COLUMN answer VARCHAR(200) NOT NULL DEFAULT '' AFTER points")
 }

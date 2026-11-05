@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import { checkConnection } from './config/db.js'
 import { ensureSchema } from './config/schema.js'
+import adminRouter from './routes/admin.js'
 import authRouter from './routes/auth.js'
 import flagsRouter from './routes/flags.js'
 import healthRouter from './routes/health.js'
@@ -15,6 +16,7 @@ app.use(express.json())
 app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/flags', flagsRouter)
+app.use('/api/admin', adminRouter)
 
 // Central error handler: log the stack, return a safe message
 app.use((err, _req, res, _next) => {

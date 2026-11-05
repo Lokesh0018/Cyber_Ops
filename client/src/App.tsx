@@ -1,3 +1,4 @@
+import { AdminPage } from './components/admin/AdminPage'
 import { Arsenal } from './components/Arsenal'
 import { AuthPage } from './components/AuthPage'
 import { Ctf } from './components/Ctf'
@@ -16,16 +17,26 @@ import { navigate, usePathname } from './hooks/useRoute'
 import { useEffect } from 'react'
 
 const CONSOLE = ['/dashboard', '/profile']
+const ADMIN = '/admin'
 
 export default function App() {
   const path = usePathname()
   const { session } = useAuth()
   // Signed-in students live in the console: any other URL (site, /login, /register) goes to the dashboard.
-  const redirect = !!session && !CONSOLE.includes(path)
+  const redirect = !!session && !CONSOLE.includes(path) && path !== ADMIN
   useEffect(() => {
     if (redirect) navigate('/dashboard', true)
   }, [redirect, path])
   if (redirect) return null
+
+  if (path === ADMIN) {
+    return (
+      <>
+        <a className="skip" href="#main">Skip to content</a>
+        <AdminPage />
+      </>
+    )
+  }
 
   if (CONSOLE.includes(path)) {
     return (
