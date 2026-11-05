@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, useAdmin } from '../../hooks/useAdmin'
-import { CloseIcon, PlusIcon, SearchIcon } from '../Icons'
+import { CloseIcon, KeyIcon, ListIcon, PlusIcon, RadarIcon, SearchIcon, UserIcon } from '../Icons'
 
 /* ───────────────────────── types ───────────────────────── */
 interface Student { id: number; fullName: string; email: string; phone: string; institution: string; branch: string; rollNumber: string; score: number; createdAt: string; solved: number; attempts: number }
@@ -14,13 +14,16 @@ interface Stats {
 type Tab = 'overview' | 'students' | 'flags' | 'submissions'
 type Toast = { kind: 'ok' | 'error'; text: string } | null
 
-const TABS: { key: Tab; cmd: string }[] = [
-  { key: 'overview', cmd: 'status' },
-  { key: 'students', cmd: 'students' },
-  { key: 'flags', cmd: 'flags' },
-  { key: 'submissions', cmd: 'submissions' },
+const TABS: { key: Tab; cmd: string; desc: string }[] = [
+  { key: 'overview', cmd: 'status', desc: 'Live totals, solve rates and recent activity.' },
+  { key: 'students', cmd: 'students', desc: 'Add, edit and score participants.' },
+  { key: 'flags', cmd: 'flags', desc: 'Create flags, set points, freeze or remove them.' },
+  { key: 'submissions', cmd: 'submissions', desc: 'Audit every attempt and undo mistakes.' },
 ]
-const fmtAt = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+const TAB_ICON: Record<Tab, ReactNode> = {
+  overview: <RadarIcon />, students: <UserIcon />, flags: <KeyIcon />, submissions: <ListIcon />,
+}
+const fmtAt =(iso: string) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
 
 /** Admin console: overview, student CRUD, flag CRUD (question link + answer), submission audit. */
 export function AdminDashboard() {
@@ -35,12 +38,14 @@ export function AdminDashboard() {
 
   return (
     <>
-      <div className="dash-head">
+      <div className="dash-head adm-head">
+        <span className="adm-head-art" aria-hidden="true" />
         <p className="tprompt"><span className="tp-user">root@cyberops</span><span className="tp-path">:~#</span> <span className="tp-cmd">./console --{TABS.find((t) => t.key === tab)?.cmd}</span></p>
         <h1>Admin console</h1>
+        <p className="adm-lede">{TABS.find((t) => t.key === tab)?.desc}</p>
         <nav className="adm-tabs" role="tablist" aria-label="Section">
           {TABS.map((t) => (
-            <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>{t.key}</button>
+            <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>{TAB_ICON[t.key]}{t.key}</button>
           ))}
         </nav>
       </div>

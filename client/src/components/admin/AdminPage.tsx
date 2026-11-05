@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type I
 import logo from '../../assets/shm-logo.webp'
 import { useAdmin, type AdminSession } from '../../hooks/useAdmin'
 import { navigate, onLinkClick } from '../../hooks/useRoute'
-import { ArrowRightIcon, EyeIcon, EyeOffIcon, LogoutIcon, ShieldIcon } from '../Icons'
+import { ArrowRightIcon, EyeIcon, EyeOffIcon, LogoutIcon } from '../Icons'
 import { AdminDashboard } from './AdminDashboard'
 
 /** /admin — organiser sign-in, then the admin console. The session is separate from the student one. */
@@ -17,7 +17,12 @@ export function AdminPage() {
           <img src={logo} alt="" width={36} height={36} />
           <span>Cyber<b>Ops</b><small>admin console</small></span>
         </a>
-        <span className="dash-session adm-session"><ShieldIcon /> {session.admin.email}</span>
+        <span className="dash-session adm-session" title={session.admin.email}>
+          <span className="adm-avatar" aria-hidden="true">{session.admin.email.charAt(0).toUpperCase()}</span>
+          <span className="adm-email">{session.admin.email}</span>
+          <span className="dot" aria-hidden="true" />
+          <span className="sr-only">signed in</span>
+        </span>
         <nav className="dash-actions" aria-label="Account">
           <button className="dash-logout" type="button" onClick={() => { signOut(); navigate('/admin', true) }}><LogoutIcon /> Logout</button>
         </nav>

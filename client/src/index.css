@@ -1588,15 +1588,53 @@ html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
 .adm-back a{color:var(--term-muted);text-decoration:none}
 .adm-back a:hover{color:var(--term-cyan)}
 
-.adm .dash-brand b{color:var(--term-amber)}
-.adm-session{color:var(--term-amber);text-transform:none;letter-spacing:.04em}
+.adm-session{color:var(--term-cyan);text-transform:none;letter-spacing:.04em}
 .adm-session .ico{width:14px;height:14px}
 .adm-tabs{display:inline-flex;flex-wrap:wrap;gap:4px;margin-top:14px;padding:3px;border-radius:9px;border:1px solid var(--term-border);background:rgba(0,184,255,.04)}
 .adm-tabs [role=tab]{min-height:38px;padding:0 16px;border:0;border-radius:7px;background:none;color:var(--term-muted);cursor:pointer;
   font-family:var(--m);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;transition:background-color .2s ease,color .2s ease}
 .adm-tabs [role=tab]:hover{color:var(--term-text)}
-.adm-tabs [role=tab][aria-selected=true]{background:var(--term-amber);color:#1a1200}
+.adm-tabs [role=tab][aria-selected=true]{background:var(--term-cyan);color:#06101c}
 .adm-tabs [role=tab]:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+/* ── admin header: top bar ── */
+.adm .dash-top{position:sticky;padding-block:10px;background:linear-gradient(180deg,rgba(14,22,38,.96),rgba(10,18,32,.92))}
+.adm .dash-top::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(0,184,255,.55) 20%,rgba(0,184,255,.55) 80%,transparent)}
+.adm-session{gap:10px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid rgba(0,184,255,.25);background:rgba(0,184,255,.05);max-width:min(340px,38vw)}
+.adm-avatar{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border-radius:50%;font-family:var(--d);font-weight:700;font-size:.8rem;
+  color:#06101c;background:linear-gradient(145deg,#6fd8ff,var(--term-cyan))}
+.adm-email{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--term-text)}
+.adm-session .dot{flex-shrink:0;width:7px;height:7px;border-radius:50%;background:var(--term-green);box-shadow:0 0 8px var(--term-green)}
+.adm .dash-logout:hover{border-color:var(--term-red);background:rgba(255,100,124,.1);color:#ffd3da}
+.adm .dash-logout:hover .ico{color:var(--term-red)}
+.adm .dash-logout:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+@media (max-width:640px){.adm-session{max-width:none;padding-right:4px}.adm-email,.adm-session .dot{display:none}}
+/* ── admin header: hero banner (title + tabs along its bottom edge) ── */
+.adm-tabs [role=tab]{display:inline-flex;align-items:center;gap:8px}
+.adm-tabs [role=tab] .ico{width:14px;height:14px;flex-shrink:0}
+@media (max-width:420px){.adm-tabs [role=tab] .ico{display:none}}
+.adm-head{--pad:clamp(18px,3vw,34px);position:relative;overflow:hidden;isolation:isolate;margin-bottom:28px;padding:clamp(22px,4vw,38px) var(--pad) 0;
+  border-radius:16px;border:1px solid rgba(0,184,255,.28);
+  background:radial-gradient(700px 320px at 0% 0%,rgba(0,184,255,.2),transparent 65%),radial-gradient(500px 300px at 100% 100%,rgba(54,123,240,.16),transparent 65%),linear-gradient(180deg,#0c1626,#09111f);
+  box-shadow:0 18px 50px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04)}
+.adm-head::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.6;
+  background-image:linear-gradient(rgba(110,160,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(110,160,255,.06) 1px,transparent 1px);background-size:36px 36px;
+  mask-image:linear-gradient(90deg,transparent,#000 70%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 70%)}
+.adm-head-art{position:absolute;z-index:-1;pointer-events:none;right:-30px;top:50%;width:min(300px,50%);aspect-ratio:1;transform:translateY(-62%);opacity:.08;
+  background:linear-gradient(160deg,#6ea0ff,#367bf0);-webkit-mask:url('./assets/kali-linux.svg') center/contain no-repeat;mask:url('./assets/kali-linux.svg') center/contain no-repeat}
+.adm-head h1{margin-top:8px;font-size:clamp(2rem,4.6vw,3rem);line-height:1.05;letter-spacing:-.01em;
+  background:linear-gradient(180deg,#fff,#b9cdee);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.adm-lede{margin:10px 0 0;max-width:52ch;font-size:.92rem;line-height:1.55;color:var(--term-muted)}
+.adm-tabs{display:flex;flex-wrap:nowrap;gap:2px;width:calc(100% + var(--pad) * 2);margin:clamp(22px,4vw,34px) calc(var(--pad) * -1) 0;padding:0 calc(var(--pad) - 14px);
+  border:0;border-top:1px solid rgba(0,184,255,.18);border-radius:0;background:rgba(5,9,18,.45);overflow-x:auto;scrollbar-width:none}
+.adm-tabs::-webkit-scrollbar{display:none}
+.adm-tabs [role=tab]{position:relative;flex:0 0 auto;min-height:52px;padding:0 16px;border-radius:0;font-weight:600;white-space:nowrap}
+.adm-tabs [role=tab]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:var(--term-cyan);box-shadow:0 0 12px rgba(0,184,255,.8);transform:scaleX(0);transition:transform .2s ease}
+.adm-tabs [role=tab][aria-selected=true]{background:linear-gradient(180deg,transparent,rgba(0,184,255,.1));color:var(--term-cyan);box-shadow:none}
+.adm-tabs [role=tab][aria-selected=true]::after{transform:scaleX(1)}
+.adm-tabs [role=tab]:not([aria-selected=true]):hover{background:rgba(255,255,255,.04);color:var(--term-text)}
+.adm-tabs [role=tab]:focus-visible{outline-offset:-3px}
+@media (prefers-reduced-motion:reduce){.adm-tabs [role=tab]::after{transition:none}}
 .adm-toast{min-height:34px;margin:-10px 0 10px;font-family:var(--m);font-size:.82rem}
 
 /* overview */
@@ -1637,7 +1675,7 @@ html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
 .adm-rowactions{white-space:nowrap}
 .adm-rowactions .adm-btn{margin-left:4px}
 .adm-answer{display:inline-flex;align-items:center;gap:8px}
-.adm-answer code{font-size:.78rem;color:var(--term-amber);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+.adm-answer code{font-size:.78rem;color:var(--term-cyan);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
 .adm-link{color:var(--term-cyan);font-size:.78rem}
 .adm-lvl{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;border:1px solid}
 .adm-lvl.t-easy{color:var(--term-cyan);border-color:rgba(0,184,255,.4)}
