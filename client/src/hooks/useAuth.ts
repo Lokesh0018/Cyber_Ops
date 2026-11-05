@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 export interface Student {
-  id: number
+  id: string
   fullName: string
   email: string
   phone: string

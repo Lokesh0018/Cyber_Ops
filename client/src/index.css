@@ -1635,6 +1635,89 @@ html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
 .adm-tabs [role=tab]:not([aria-selected=true]):hover{background:rgba(255,255,255,.04);color:var(--term-text)}
 .adm-tabs [role=tab]:focus-visible{outline-offset:-3px}
 @media (prefers-reduced-motion:reduce){.adm-tabs [role=tab]::after{transition:none}}
+/* ── admin overview: live bar, KPI tiles, charts ── */
+.ov{display:flex;flex-direction:column;gap:18px;font-family:var(--m)}
+.ov-bar-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.ov-live{display:inline-flex;align-items:center;gap:9px;margin:0;padding:6px 12px;border-radius:999px;font-size:.74rem;color:var(--term-muted);border:1px solid rgba(66,153,225,.22);background:rgba(255,255,255,.025)}
+.ov-live.on{color:var(--term-text);border-color:rgba(16,231,160,.35);background:rgba(16,231,160,.06)}
+.ov-live-dot{width:8px;height:8px;border-radius:50%;background:var(--term-dim)}
+.ov-live.on .ov-live-dot{background:var(--term-green);box-shadow:0 0 0 0 rgba(16,231,160,.6)}
+.ov-tools{display:flex;align-items:center;gap:8px}
+.ov-seg{display:inline-flex;padding:3px;gap:2px;border-radius:9px;border:1px solid var(--term-border);background:rgba(0,184,255,.04)}
+.ov-seg button{min-height:32px;min-width:44px;padding:0 12px;border:0;border-radius:7px;background:none;color:var(--term-muted);cursor:pointer;font:inherit;font-size:.76rem;letter-spacing:.06em;transition:background-color .2s ease,color .2s ease}
+.ov-seg button:hover{color:var(--term-text)}
+.ov-seg button[aria-pressed=true]{background:var(--term-cyan);color:#06101c;font-weight:700}
+.ov-seg button:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+.ov-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.ov-tile{position:relative;display:flex;flex-direction:column;gap:6px;padding:16px 18px 18px;border-radius:14px;text-align:left;cursor:pointer;color:var(--term-text);font:inherit;overflow:hidden;
+  border:1px solid rgba(0,184,255,.2);background:linear-gradient(160deg,rgba(0,184,255,.08),rgba(0,184,255,.015) 60%);transition:border-color .2s ease,background-color .2s ease,box-shadow .2s ease}
+.ov-tile:hover{border-color:var(--term-cyan);box-shadow:0 10px 30px rgba(0,184,255,.12)}
+.ov-tile:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+.ov-tile::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--term-cyan),transparent 75%);opacity:.7}
+.ov-tile-head{display:flex;align-items:center;gap:9px}
+.ov-tile-ico{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;color:var(--term-cyan);background:rgba(0,184,255,.1);border:1px solid rgba(0,184,255,.25)}
+.ov-tile-ico .ico{width:15px;height:15px}
+.ov-delta{align-self:flex-start;margin-top:2px;padding:2px 8px;border-radius:999px;font-size:.66rem;font-weight:600;letter-spacing:.03em;color:var(--term-green);background:rgba(16,231,160,.08);border:1px solid rgba(16,231,160,.25)}
+.ov-tile small{font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;color:var(--term-muted)}
+.ov-tile b{font-family:var(--d);font-size:2.1rem;line-height:1;color:var(--term-text);font-variant-numeric:tabular-nums}
+.ov-tile-sub{font-size:.74rem;color:var(--term-muted)}
+.ov-spark{position:absolute;right:14px;bottom:14px;opacity:.9}
+.ov-chart{position:relative;margin-top:6px}
+.ov-chart svg{display:block;overflow:visible}
+.ov-grid{stroke:rgba(145,166,199,.14);stroke-width:1}
+.ov-axis{fill:var(--term-muted);font-family:var(--m);font-size:10.5px}
+.ov-cross{stroke:rgba(220,232,248,.35);stroke-width:1;stroke-dasharray:3 3}
+.ov-dot{stroke:var(--term-bg,#070d18);stroke-width:2}
+.ov-tip{position:absolute;top:6px;transform:translateX(-50%);display:flex;flex-direction:column;gap:3px;min-width:150px;padding:8px 11px;border-radius:9px;pointer-events:none;z-index:2;
+  font-size:.74rem;color:var(--term-text);background:rgba(7,13,24,.96);border:1px solid var(--term-border);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.ov-tip b{font-size:.72rem;color:var(--term-muted);font-weight:600}
+.ov-tip span{display:flex;align-items:center;gap:7px}
+.ov-tip em{margin-left:auto;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums}
+.ov-tip i,.ov-legend i,.ov-kv i{display:inline-block;width:10px;height:3px;border-radius:2px}
+.ov-tip i.ov-dashed,.ov-legend i.ov-dashed{background-image:linear-gradient(90deg,var(--term-bg,#070d18) 0 30%,transparent 30% 40%,var(--term-bg,#070d18) 40% 70%,transparent 70%)!important;background-blend-mode:normal}
+.ov-legend{display:flex;flex-wrap:wrap;gap:16px;margin:0;padding:0;list-style:none;font-size:.76rem;color:var(--term-muted)}
+.ov-legend li{display:inline-flex;align-items:center;gap:8px}
+.ov-legend b{color:var(--term-text);font-variant-numeric:tabular-nums}
+.ov-empty{margin:6px 0 0;font-size:.78rem}
+.ov-hit{display:flex;align-items:center;gap:clamp(14px,3vw,28px);flex-wrap:wrap;margin-top:8px}
+.ov-ring{position:relative;width:140px;height:140px;flex-shrink:0}
+.ov-ring-track{stroke:rgba(145,166,199,.14)}
+.ov-ring-arc{transition:stroke-dasharray .6s ease;filter:drop-shadow(0 0 6px rgba(16,231,160,.35))}
+.ov-ring-mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ov-ring-mid b{font-family:var(--d);font-size:1.9rem;line-height:1;color:var(--term-text);font-variant-numeric:tabular-nums}
+.ov-ring-mid span{margin-top:4px;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;color:var(--term-muted)}
+.ov-kv{list-style:none;margin:0;padding:0;flex:1;min-width:150px;display:flex;flex-direction:column;gap:10px;font-size:.82rem}
+.ov-kv li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px dashed rgba(66,153,225,.14)}
+.ov-kv span{display:inline-flex;align-items:center;gap:8px;color:var(--term-muted)}
+.ov-kv b{color:var(--term-text);font-variant-numeric:tabular-nums}
+.ov-bars{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:13px;font-size:.8rem}
+.ov-bar-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:5px}
+.ov-bar-lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--term-text)}
+.ov-bar-val{flex-shrink:0;font-weight:700;color:var(--term-text);font-variant-numeric:tabular-nums}
+.ov-bar{display:block;height:6px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
+.ov-bar i{display:block;height:100%;border-radius:0 999px 999px 0;transition:width .6s cubic-bezier(.22,1,.36,1)}
+.ov-bar-sub{display:block;margin-top:4px;font-size:.7rem;color:var(--term-muted)}
+.ov-rank{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:9px;border-radius:6px;font-size:.68rem;font-weight:700;color:var(--term-cyan);background:rgba(0,184,255,.1);border:1px solid rgba(0,184,255,.28)}
+/* three-column dashboard grid: activity chart spans two columns, the feed spans all three */
+.ov-grid2{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px}
+.ov-s-act{grid-column:span 2}
+.ov-s-feed{grid-column:1 / -1}
+.ov .dcard{background:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,.008));border-color:rgba(66,153,225,.2);transition:border-color .2s ease}
+.ov .dcard:hover{border-color:rgba(0,184,255,.38)}
+.ov .dcard-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px}
+.ov .dcard-h{font-size:.82rem;letter-spacing:.04em}
+.ov-bars li:first-child .ov-rank{background:var(--term-cyan);color:#06101c;border-color:var(--term-cyan)}
+.ov .adm-recent{max-height:340px;overflow-y:auto;padding-right:4px;scrollbar-width:thin}
+@media (max-width:1100px){.ov-grid2{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ov-s-act{grid-column:1 / -1}}
+@media (max-width:700px){.ov-grid2{grid-template-columns:minmax(0,1fr)!important}.ov-s-act,.ov-s-feed{grid-column:auto}}
+.ov-new{animation:ovNew 2.4s ease-out}
+@keyframes ovNew{from{background:rgba(0,184,255,.22)}to{background:transparent}}
+@media (prefers-reduced-motion:no-preference){
+  .ov-live.on .ov-live-dot{animation:ovPing 2s ease-out infinite}
+  @keyframes ovPing{0%{box-shadow:0 0 0 0 rgba(16,231,160,.55)}70%,100%{box-shadow:0 0 0 8px rgba(16,231,160,0)}}
+}
+@media (prefers-reduced-motion:reduce){.ov-bar i,.ov-ring-arc{transition:none}.ov-new{animation:none}}
+@media (max-width:560px){.ov-spark{display:none}.ov-tile b{font-size:1.8rem}}
 .adm-toast{min-height:34px;margin:-10px 0 10px;font-family:var(--m);font-size:.82rem}
 
 /* overview */

@@ -15,7 +15,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   try {
     const [flags] = await pool.query('SELECT id, title, points, level, frozen, question_url FROM flags ORDER BY sort_order ASC, id ASC')
     const [subs] = await pool.query(
-      'SELECT flag_id, COUNT(*) AS attempts, MAX(correct) AS solved, MAX(created_at) AS last FROM submissions WHERE student_id = ? GROUP BY flag_id',
+      'SELECT flag_id, COUNT(*) AS attempts, MAX(correct) AS solved, MAX(created_at) AS last FROM submissions WHERE student_email = ? GROUP BY flag_id',
       [req.studentId],
     )
     const byFlag = new Map(subs.map((s) => [s.flag_id, s]))
@@ -45,17 +45,17 @@ router.post('/:id/submit', requireAuth, async (req, res, next) => {
     if (Number(flag.frozen)) { await conn.rollback(); return res.status(423).json({ message: 'This flag is frozen by the organisers. Submissions are paused.', frozen: true }) }
 
     const [[st]] = await conn.query(
-      'SELECT COUNT(*) AS attempts, COALESCE(MAX(correct), 0) AS solved FROM submissions WHERE student_id = ? AND flag_id = ? FOR UPDATE',
+      'SELECT COUNT(*) AS attempts, COALESCE(MAX(correct), 0) AS solved FROM submissions WHERE student_email = ? AND flag_id = ? FOR UPDATE',
       [req.studentId, flagId],
     )
     if (Number(st.solved)) { await conn.rollback(); return res.status(409).json({ message: 'Already solved.', solved: true, attempts: Number(st.attempts) }) }
     if (Number(st.attempts) >= MAX_ATTEMPTS) { await conn.rollback(); return res.status(429).json({ message: 'No attempts left for this flag.', attempts: Number(st.attempts) }) }
 
     const correct = hashAnswer(answer) === flag.answer_hash
-    await conn.query('INSERT INTO submissions (student_id, flag_id, answer, correct) VALUES (?, ?, ?, ?)', [req.studentId, flagId, answer.trim().slice(0, 200), correct ? 1 : 0])
+    await conn.query('INSERT INTO submissions (student_email, flag_id, answer, correct) VALUES (?, ?, ?, ?)', [req.studentId, flagId, answer.trim().slice(0, 200), correct ? 1 : 0])
     if (correct) {
-      await conn.query('INSERT INTO score_events (student_id, points, note) VALUES (?, ?, ?)', [req.studentId, flag.points, flag.title])
-      await conn.query('UPDATE students SET score = score + ? WHERE id = ?', [flag.points, req.studentId])
+      await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [req.studentId, flag.points, flag.title])
+      await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [flag.points, req.studentId])
     }
     await conn.commit()
     const attempts = Number(st.attempts) + 1

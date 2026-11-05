@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, useAdmin } from '../../hooks/useAdmin'
 import { CloseIcon, KeyIcon, ListIcon, PlusIcon, RadarIcon, SearchIcon, UserIcon } from '../Icons'
+import { Overview } from './AdminOverview'
 
 /* ───────────────────────── types ───────────────────────── */
-interface Student { id: number; fullName: string; email: string; phone: string; institution: string; branch: string; rollNumber: string; score: number; createdAt: string; solved: number; attempts: number }
+interface Student { id: string; fullName: string; email: string; phone: string; institution: string; branch: string; rollNumber: string; score: number; createdAt: string; solved: number; attempts: number }
 interface Flag { id: number; title: string; points: number; level: 'easy' | 'medium' | 'hard'; frozen: boolean; answer: string; questionUrl: string; sortOrder: number; attempts: number; captures: number }
-interface Submission { id: number; answer: string; correct: 0 | 1; created_at: string; student_id: number; student: string; email: string; flag_id: number; flag: string; points: number }
-interface Stats {
-  students: number; points: number; colleges: number; flags: number; totalPoints: number; submissions: number; captures: number
-  perFlag: { id: number; title: string; points: number; attempts: number; captures: number }[]
-  recent: { id: number; correct: 0 | 1; created_at: string; answer: string; student: string; flag: string }[]
-}
+interface Submission { id: number; answer: string; correct: 0 | 1; created_at: string; student_id: string; student: string; email: string; flag_id: number; flag: string; points: number }
 type Tab = 'overview' | 'students' | 'flags' | 'submissions'
 type Toast = { kind: 'ok' | 'error'; text: string } | null
 
@@ -62,65 +58,6 @@ export function AdminDashboard() {
   )
 }
 
-/* ───────────────────────── overview ───────────────────────── */
-function Overview({ go }: { go: (t: Tab) => void }) {
-  const { api } = useAdmin()
-  const [s, setS] = useState<Stats | null>(null)
-  const [err, setErr] = useState('')
-  useEffect(() => { api<Stats>('/stats').then(setS).catch((e: Error) => setErr(e.message)) }, [api])
-  if (err) return <p className="terr" role="alert"><b>[✗]</b> {err}</p>
-  if (!s) return <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>
-  const rate = s.submissions ? Math.round((s.captures / s.submissions) * 100) : 0
-  const tiles: { label: string; value: ReactNode; sub: string; to: Tab }[] = [
-    { label: 'students', value: s.students, sub: `${s.colleges} colleges`, to: 'students' },
-    { label: 'flags', value: s.flags, sub: `${s.totalPoints} pts available`, to: 'flags' },
-    { label: 'submissions', value: s.submissions, sub: `${s.captures} captures · ${rate}% hit rate`, to: 'submissions' },
-    { label: 'points awarded', value: s.points, sub: 'across all students', to: 'students' },
-  ]
-  return (
-    <div className="dash-grid">
-      <section className="dcard dcard-wide" aria-label="Headline numbers">
-        <div className="adm-tiles">
-          {tiles.map((t) => (
-            <button key={t.label} type="button" className="adm-tile" onClick={() => go(t.to)}>
-              <small>{t.label}</small><b>{t.value}</b><span className="tmuted">{t.sub}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="dcard" aria-labelledby="a-pf">
-        <h2 id="a-pf" className="dcard-h"><span className="tp-dollar">$</span> ./flags --solve-rate</h2>
-        {s.perFlag.length === 0 && <p className="tmuted">No flags yet.</p>}
-        <ul className="adm-bars">
-          {s.perFlag.map((f) => {
-            const pct = s.students ? Math.round((f.captures / s.students) * 100) : 0
-            return (
-              <li key={f.id}>
-                <span className="adm-barlbl"><b>{f.title}</b> <span className="tmuted">· {f.points} pts · {f.captures}/{s.students} solved · {f.attempts} tries</span></span>
-                <span className="adm-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${f.title} solve rate`}><i style={{ width: `${pct}%` }} /></span>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
-
-      <section className="dcard" aria-labelledby="a-rec">
-        <h2 id="a-rec" className="dcard-h"><span className="tp-dollar">$</span> tail -n 12 submissions.log</h2>
-        {s.recent.length === 0 && <p className="tmuted">Nothing submitted yet.</p>}
-        <ol className="mlog-list adm-recent">
-          {s.recent.map((r) => (
-            <li key={r.id} className={`mlog-row k-${r.correct ? 'capture' : 'miss'}`}>
-              <span className="mlog-time">{fmtAt(r.created_at)}</span>
-              <span className="mlog-tag" aria-hidden="true">{r.correct ? '[✓]' : '[✗]'}</span>
-              <span className="mlog-msg"><b>{r.student}</b> → {r.flag} {r.correct ? <span className="mlog-pts">captured</span> : <code className="adm-ans">{r.answer}</code>}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </div>
-  )
-}
 
 /* ───────────────────────── shared bits ───────────────────────── */
 function Field({ id, label, error, children, hint }: { id: string; label: string; error?: string; hint?: string; children: ReactNode }) {
@@ -192,7 +129,7 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
     setBusy(true); setErrors({})
     try {
       if (edit === 'new') { await api('/students', { method: 'POST', body }); notify({ kind: 'ok', text: `${body.fullName} added.` }) }
-      else { await api(`/students/${edit.id}`, { method: 'PUT', body }); notify({ kind: 'ok', text: `${body.fullName} updated.` }) }
+      else { await api(`/students/${encodeURIComponent(edit.id)}`, { method: 'PUT', body }); notify({ kind: 'ok', text: `${body.fullName} updated.` }) }
       setEdit(null); load()
     } catch (err) {
       setErrors((err as ApiError).errors ?? {})
@@ -205,14 +142,14 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
     const fd = new FormData(e.currentTarget)
     setBusy(true)
     try {
-      await api(`/students/${award.id}/score`, { method: 'POST', body: { points: Number(fd.get('points')), note: fd.get('note') } })
+      await api(`/students/${encodeURIComponent(award.id)}/score`, { method: 'POST', body: { points: Number(fd.get('points')), note: fd.get('note') } })
       notify({ kind: 'ok', text: `Score updated for ${award.fullName}.` }); setAward(null); load()
     } catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
   const doDelete = async () => {
     if (busy || !del) return
     setBusy(true)
-    try { await api(`/students/${del.id}`, { method: 'DELETE' }); notify({ kind: 'ok', text: `${del.fullName} removed.` }); setDel(null); load() }
+    try { await api(`/students/${encodeURIComponent(del.id)}`, { method: 'DELETE' }); notify({ kind: 'ok', text: `${del.fullName} removed.` }); setDel(null); load() }
     catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
 

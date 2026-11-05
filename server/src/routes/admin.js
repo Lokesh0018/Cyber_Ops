@@ -19,7 +19,7 @@ const ROLL_RE = /^[A-Za-z0-9\-\/]{3,30}$/
 const normRoll = (v) => String(v ?? '').trim().toUpperCase()
 
 const publicStudent = (r) => ({
-  id: r.id, fullName: r.full_name, email: r.email, phone: r.phone, institution: r.institution,
+  id: r.email, fullName: r.full_name, email: r.email, phone: r.phone, institution: r.institution,
   branch: r.branch, rollNumber: r.roll_number, score: r.score ?? 0, createdAt: r.created_at,
   solved: Number(r.solved ?? 0), attempts: Number(r.attempts ?? 0),
 })
@@ -40,8 +40,13 @@ router.use(requireAdmin)
 router.get('/me', (_req, res) => res.json({ admin: { email: ADMIN_EMAIL } }))
 
 // GET /api/admin/stats — headline numbers for the overview
-router.get('/stats', async (_req, res, next) => {
+// ?range=1h|6h|24h picks the window for the activity time series (always 24 buckets, oldest first)
+const RANGE_HOURS = { '1h': 1, '6h': 6, '24h': 24 }
+router.get('/stats', async (req, res, next) => {
   try {
+    const hours = RANGE_HOURS[req.query.range] ?? 6
+    const BUCKETS = 24
+    const bucketSec = Math.round((hours * 3600) / BUCKETS)
     const [[s]] = await pool.query('SELECT COUNT(*) AS students, COALESCE(SUM(score),0) AS points, COUNT(DISTINCT institution) AS colleges FROM students')
     const [[f]] = await pool.query('SELECT COUNT(*) AS flags, COALESCE(SUM(points),0) AS total FROM flags')
     const [[sub]] = await pool.query('SELECT COUNT(*) AS submissions, COALESCE(SUM(correct),0) AS captures FROM submissions')
@@ -51,8 +56,22 @@ router.get('/stats', async (_req, res, next) => {
     )
     const [recent] = await pool.query(
       `SELECT s.id, s.correct, s.created_at, s.answer, st.full_name AS student, f.title AS flag
-         FROM submissions s JOIN students st ON st.id = s.student_id JOIN flags f ON f.id = s.flag_id
+         FROM submissions s JOIN students st ON st.email = s.student_email JOIN flags f ON f.id = s.flag_id
         ORDER BY s.id DESC LIMIT 12`,
+    )
+    const [bucketRows] = await pool.query(
+      `SELECT FLOOR((UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_at)) / ?) AS ago, COUNT(*) AS attempts, COALESCE(SUM(correct),0) AS captures
+         FROM submissions WHERE created_at >= NOW() - INTERVAL ? SECOND GROUP BY ago`,
+      [bucketSec, bucketSec * BUCKETS],
+    )
+    const timeline = Array.from({ length: BUCKETS }, () => ({ attempts: 0, captures: 0 }))
+    for (const r of bucketRows) {
+      const i = BUCKETS - 1 - Number(r.ago)
+      if (i >= 0 && i < BUCKETS) timeline[i] = { attempts: Number(r.attempts), captures: Number(r.captures) }
+    }
+    const [topStudents] = await pool.query('SELECT email AS id, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC LIMIT 5')
+    const [byCollege] = await pool.query(
+      'SELECT institution, COUNT(*) AS students, COALESCE(SUM(score),0) AS points FROM students GROUP BY institution ORDER BY points DESC, students DESC LIMIT 6',
     )
     res.json({
       students: Number(s.students), points: Number(s.points), colleges: Number(s.colleges),
@@ -60,6 +79,11 @@ router.get('/stats', async (_req, res, next) => {
       submissions: Number(sub.submissions), captures: Number(sub.captures),
       perFlag: perFlag.map((r) => ({ ...r, attempts: Number(r.attempts), captures: Number(r.captures) })),
       recent,
+      range: { key: Object.keys(RANGE_HOURS).find((k) => RANGE_HOURS[k] === hours), bucketSec, buckets: BUCKETS },
+      timeline,
+      topStudents: topStudents.map((r) => ({ ...r, score: Number(r.score) })),
+      byCollege: byCollege.map((r) => ({ institution: r.institution, students: Number(r.students), points: Number(r.points) })),
+      serverNow: Date.now(),
     })
   } catch (err) { next(err) }
 })
@@ -68,7 +92,7 @@ router.get('/stats', async (_req, res, next) => {
 
 const STUDENT_SQL = `
   SELECT st.*, COUNT(DISTINCT CASE WHEN s.correct = 1 THEN s.flag_id END) AS solved, COUNT(s.id) AS attempts
-    FROM students st LEFT JOIN submissions s ON s.student_id = st.id`
+    FROM students st LEFT JOIN submissions s ON s.student_email = st.email`
 
 function validateStudent(b, partial = false) {
   const e = {}
@@ -87,7 +111,7 @@ router.get('/students', async (req, res, next) => {
     const q = `%${String(req.query.q ?? '').trim()}%`
     const [rows] = await pool.query(
       `${STUDENT_SQL} WHERE st.full_name LIKE ? OR st.email LIKE ? OR st.institution LIKE ? OR st.roll_number LIKE ?
-       GROUP BY st.id ORDER BY st.score DESC, st.full_name ASC`,
+       GROUP BY st.email ORDER BY st.score DESC, st.full_name ASC`,
       [q, q, q, q],
     )
     res.json({ students: rows.map(publicStudent) })
@@ -101,33 +125,38 @@ router.post('/students', async (req, res, next) => {
     const errors = validateStudent(b)
     if (Object.keys(errors).length) return res.status(422).json({ message: 'Fix the highlighted fields.', errors })
     const email = b.email.trim().toLowerCase()
-    const [dupes] = await pool.query('SELECT id FROM students WHERE email = ? LIMIT 1', [email])
+    const [dupes] = await pool.query('SELECT email FROM students WHERE email = ? LIMIT 1', [email])
     if (dupes.length) return res.status(409).json({ message: 'Email already registered.', errors: { email: 'Already registered.' } })
-    const [r] = await pool.query(
+    await pool.query(
       'INSERT INTO students (full_name, email, phone, institution, branch, roll_number) VALUES (?, ?, ?, ?, ?, ?)',
       [b.fullName.trim(), email, b.phone.trim(), b.institution.trim(), b.branch.trim(), normRoll(b.rollNumber)],
     )
-    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.id = ? GROUP BY st.id`, [r.insertId])
+    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.email = ? GROUP BY st.email`, [email])
     res.status(201).json({ student: publicStudent(row) })
   } catch (err) { next(err) }
 })
 
-// PUT /api/admin/students/:id
+// The student "id" in URLs is the student's email (the primary key), URL-encoded by the client.
+const emailParam = (req) => String(req.params.id ?? '').trim().toLowerCase()
+
+// PUT /api/admin/students/:id — :id is the current email; the body may change it (history follows via ON UPDATE CASCADE)
 router.put('/students/:id', async (req, res, next) => {
   try {
-    const id = Number(req.params.id)
+    const id = emailParam(req)
     const b = req.body ?? {}
     const errors = validateStudent(b)
     if (Object.keys(errors).length) return res.status(422).json({ message: 'Fix the highlighted fields.', errors })
     const email = b.email.trim().toLowerCase()
-    const [dupes] = await pool.query('SELECT id FROM students WHERE email = ? AND id <> ? LIMIT 1', [email, id])
-    if (dupes.length) return res.status(409).json({ message: 'Email already used by another student.', errors: { email: 'Already in use.' } })
+    if (email !== id) {
+      const [dupes] = await pool.query('SELECT email FROM students WHERE email = ? LIMIT 1', [email])
+      if (dupes.length) return res.status(409).json({ message: 'Email already used by another student.', errors: { email: 'Already in use.' } })
+    }
     const [r] = await pool.query(
-      'UPDATE students SET full_name = ?, email = ?, phone = ?, institution = ?, branch = ?, roll_number = ? WHERE id = ?',
+      'UPDATE students SET full_name = ?, email = ?, phone = ?, institution = ?, branch = ?, roll_number = ? WHERE email = ?',
       [b.fullName.trim(), email, b.phone.trim(), b.institution.trim(), b.branch.trim(), normRoll(b.rollNumber), id],
     )
     if (!r.affectedRows) return res.status(404).json({ message: 'Student not found.' })
-    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.id = ? GROUP BY st.id`, [id])
+    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.email = ? GROUP BY st.email`, [email])
     res.json({ student: publicStudent(row) })
   } catch (err) { next(err) }
 })
@@ -136,16 +165,16 @@ router.put('/students/:id', async (req, res, next) => {
 router.post('/students/:id/score', async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
-    const id = Number(req.params.id)
+    const id = emailParam(req)
     const points = Math.trunc(Number(req.body?.points))
     const note = String(req.body?.note ?? 'manual adjustment').trim().slice(0, 120) || 'manual adjustment'
     if (!Number.isFinite(points) || points === 0 || Math.abs(points) > 100000) return res.status(422).json({ message: 'Points must be a non-zero whole number.' })
     await conn.beginTransaction()
-    const [r] = await conn.query('UPDATE students SET score = score + ? WHERE id = ?', [points, id])
+    const [r] = await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [points, id])
     if (!r.affectedRows) { await conn.rollback(); return res.status(404).json({ message: 'Student not found.' }) }
-    await conn.query('INSERT INTO score_events (student_id, points, note) VALUES (?, ?, ?)', [id, points, note])
+    await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [id, points, note])
     await conn.commit()
-    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.id = ? GROUP BY st.id`, [id])
+    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.email = ? GROUP BY st.email`, [id])
     res.json({ student: publicStudent(row) })
   } catch (err) { await conn.rollback().catch(() => {}); next(err) } finally { conn.release() }
 })
@@ -153,7 +182,7 @@ router.post('/students/:id/score', async (req, res, next) => {
 // DELETE /api/admin/students/:id — cascades to submissions and score events
 router.delete('/students/:id', async (req, res, next) => {
   try {
-    const [r] = await pool.query('DELETE FROM students WHERE id = ?', [Number(req.params.id)])
+    const [r] = await pool.query('DELETE FROM students WHERE email = ?', [emailParam(req)])
     if (!r.affectedRows) return res.status(404).json({ message: 'Student not found.' })
     res.json({ ok: true })
   } catch (err) { next(err) }
@@ -275,8 +304,8 @@ router.get('/submissions', async (req, res, next) => {
     if (req.query.flag) { where.push('s.flag_id = ?'); args.push(Number(req.query.flag)) }
     if (req.query.correct === '1' || req.query.correct === '0') { where.push('s.correct = ?'); args.push(Number(req.query.correct)) }
     const [rows] = await pool.query(
-      `SELECT s.id, s.answer, s.correct, s.created_at, st.id AS student_id, st.full_name AS student, st.email, f.id AS flag_id, f.title AS flag, f.points
-         FROM submissions s JOIN students st ON st.id = s.student_id JOIN flags f ON f.id = s.flag_id
+      `SELECT s.id, s.answer, s.correct, s.created_at, s.student_email AS student_id, st.full_name AS student, st.email, f.id AS flag_id, f.title AS flag, f.points
+         FROM submissions s JOIN students st ON st.email = s.student_email JOIN flags f ON f.id = s.flag_id
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY s.id DESC LIMIT 300`,
       args,
     )

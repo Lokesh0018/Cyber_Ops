@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { SCORE_EVENT } from './FlagBoard'
 
-interface Row { id: number; name: string; institution: string; score: number }
-interface Series { id: number; name: string; points: { t: string; score: number }[] }
-interface Board { all: Row[]; top: Row[]; series: Series[]; me: { id: number; score: number; rank: number; total: number } }
+interface Row { id: string; name: string; institution: string; score: number }
+interface Series { id: string; name: string; points: { t: string; score: number }[] }
+interface Board { all: Row[]; top: Row[]; series: Series[]; me: { id: string; score: number; rank: number; total: number } }
 
 /** Eight validated categorical hues (dark surface); slots 9–10 reuse 1–2 with a dashed stroke so identity is never colour-alone. */
 const HUES = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
