@@ -2,16 +2,16 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import { useAuth } from '../hooks/useAuth'
 import { ArrowRightIcon } from './Icons'
 
-interface Flag { id: number; title: string; points: number; question_url: string; attempts: number; solved: boolean; lastAt: string | null }
+interface Flag { id: number; title: string; points: number; level: Tier; frozen: boolean; question_url: string; attempts: number; solved: boolean; lastAt: string | null }
 interface Board { maxAttempts: number; flags: Flag[] }
 interface Result { kind: 'ok' | 'error'; text: string }
 
 /** Fired after a correct submission so the scoreboard re-fetches. */
 export const SCORE_EVENT = 'cyberops:score'
 
-/** Difficulty tier from points — flags are grouped into levels by it (the number is always printed too). */
+/** Level is set by the organisers per flag; flags are grouped into levels by it. */
 type Tier = 'easy' | 'medium' | 'hard'
-const tier = (points: number): Tier => (points <= 300 ? 'easy' : points <= 700 ? 'medium' : 'hard')
+const tier = (f: Flag): Tier => f.level ?? 'easy'
 const LEVELS: { key: Tier; n: number; label: string }[] = [
   { key: 'easy', n: 1, label: 'recon' },
   { key: 'medium', n: 2, label: 'exploit' },
@@ -81,7 +81,7 @@ export function FlagBoard() {
     if (!board) return
     const next: Record<string, boolean> = {}
     for (const lv of LEVELS) {
-      const g = board.flags.filter((f) => tier(f.points) === lv.key)
+      const g = board.flags.filter((f) => tier(f) === lv.key)
       if (g.length && g.every((f) => f.solved) && !userFolded.current.has(lv.key)) next[lv.key] = true
     }
     setFolded((m) => ({ ...m, ...next }))
@@ -92,9 +92,6 @@ export function FlagBoard() {
     setFolded((m) => ({ ...m, [key]: !m[key] }))
   }
 
-  /** Client-side shape check only — the server still decides correctness. */
-  const FLAG_RE = /^CYBEROPS\{[^{}\s]+\}$/
-  const shape = (v: string) => (!v ? 'idle' : FLAG_RE.test(v.trim()) ? 'ok' : v.trim().toUpperCase().startsWith('CYBEROPS{') ? 'partial' : 'bad')
 
   const flags = board?.flags ?? []
   const solved = flags.filter((f) => f.solved)
@@ -125,7 +122,7 @@ export function FlagBoard() {
             {solved.length === flags.length
               ? <><b className="ok">[✓] all flags captured</b> <span className="tmuted">— nothing left to pwn. GG.</span></>
               : (() => {
-                  const nxt = flags.find((f) => !f.solved && f.attempts < board.maxAttempts)
+                  const nxt = flags.find((f) => !f.solved && !f.frozen && f.attempts < board.maxAttempts)
                   return nxt
                     ? <><span className="tmuted">next target</span> <a className="fb-next" href={`#flag-${nxt.id}`}>{nxt.title}</a> <span className="tmuted">· +{nxt.points} pts</span></>
                     : <span className="tmuted">no open flags — all remaining flags are locked</span>
@@ -140,7 +137,7 @@ export function FlagBoard() {
       {board && (
         <ol className="fb-ov" aria-label="Level overview">
           {LEVELS.map((lv) => {
-            const g = flags.filter((f) => tier(f.points) === lv.key)
+            const g = flags.filter((f) => tier(f) === lv.key)
             if (!g.length) return null
             const done = g.filter((f) => f.solved).length
             const pts = g.filter((f) => f.solved).reduce((a, f) => a + f.points, 0)
@@ -166,7 +163,7 @@ export function FlagBoard() {
       {board && (
         <div className="fb-levels">
           {LEVELS.map((lv) => {
-            const group = flags.filter((f) => tier(f.points) === lv.key)
+            const group = flags.filter((f) => tier(f) === lv.key)
             if (!group.length) return null
             const got = group.filter((f) => f.solved)
             const lvEarned = got.reduce((a, f) => a + f.points, 0)
@@ -211,13 +208,14 @@ export function FlagBoard() {
                   {group.map((f, i) => {
                     const left = board.maxAttempts - f.attempts
                     const out = !f.solved && left <= 0
-                    const locked = f.solved || out
+                    const frozen = !f.solved && f.frozen
+                    const locked = f.solved || out || frozen
                     const res = results[f.id]
                     const id = `flag-${f.id}`
                     const num = `${lv.n}.${i + 1}`
-                    const status = f.solved ? 'captured' : out ? 'locked' : f.attempts ? 'in progress' : 'open'
+                    const status = f.solved ? 'captured' : frozen ? 'frozen' : out ? 'locked' : f.attempts ? 'in progress' : 'open'
                     return (
-                      <li key={f.id} id={`flag-${f.id}`} className={['fb-q', f.solved ? 'solved' : '', out ? 'out' : '', shake === f.id ? 'shake' : '', left === 1 && !locked ? 'last' : ''].filter(Boolean).join(' ')} style={{ '--i': flags.indexOf(f) } as CSSProperties}>
+                      <li key={f.id} id={`flag-${f.id}`} className={['fb-q', f.solved ? 'solved' : '', out ? 'out' : '', frozen ? 'frozen' : '', shake === f.id ? 'shake' : '', left === 1 && !locked ? 'last' : ''].filter(Boolean).join(' ')} style={{ '--i': flags.indexOf(f) } as CSSProperties}>
                         <form className="fb-qform" onSubmit={(e) => submit(e, f)}>
                           <span className="fb-qnum" aria-hidden="true">
                             <small>flag</small><b>{num}</b>
@@ -247,6 +245,8 @@ export function FlagBoard() {
                           <span className="fb-answer">
                             {f.solved ? (
                               <span className="fb-captured">captured — +{f.points} pts added to your score</span>
+                            ) : frozen ? (
+                              <span className="fb-frozen">[❄] frozen by organisers — submissions paused</span>
                             ) : out ? (
                               <span className="fb-locked">[✗] no attempts left — flag locked</span>
                             ) : (
@@ -258,30 +258,18 @@ export function FlagBoard() {
                                   name="answer"
                                   className="fb-input"
                                   type="text"
-                                  placeholder="CYBEROPS{…}"
+                                  placeholder="paste your flag"
                                   disabled={locked || busy === f.id}
                                   required
                                   spellCheck={false}
                                   autoComplete="off"
                                   autoCapitalize="off"
-                                  aria-describedby={`${id}-hint`}
                                   aria-invalid={res?.kind === 'error' && !drafts[f.id] ? true : undefined}
                                   onChange={(ev) => {
                                     setDrafts((m) => ({ ...m, [f.id]: ev.target.value }))
                                     if (res) setResults((m) => { const n = { ...m }; delete n[f.id]; return n })
                                   }}
                                 />
-                                <span className={`fb-shape s-${shape(drafts[f.id] ?? '')}`} aria-hidden="true" />
-                              </span>
-                            )}
-                            {!locked && !res && (
-                              <span id={`${id}-hint`} className={`fb-hint s-${shape(drafts[f.id] ?? '')}`}>
-                                {{
-                                  idle: 'format: CYBEROPS{…} — case sensitive, no spaces',
-                                  partial: 'close — remember the closing brace',
-                                  ok: 'format looks right — press enter to submit',
-                                  bad: 'flags start with CYBEROPS{ — paste the whole thing',
-                                }[shape(drafts[f.id] ?? '')]}
                               </span>
                             )}
                             {res && !f.solved && <span className={`fb-res ${res.kind}`} role="status">{res.kind === 'ok' ? '[✓]' : '[✗]'} {res.text}</span>}

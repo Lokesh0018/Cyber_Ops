@@ -35,9 +35,9 @@ await ensureSchema()
 // Flags are upserted on every run (students are only added when missing).
 for (const [i, [title, points, answer, url]] of FLAGS.entries()) {
   await pool.query(
-    `INSERT INTO flags (title, points, answer, answer_hash, question_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE points = VALUES(points), answer = VALUES(answer), answer_hash = VALUES(answer_hash), question_url = VALUES(question_url), sort_order = VALUES(sort_order)`,
-    [title, points, answer, hashAnswer(answer), url, i],
+    `INSERT INTO flags (title, points, level, answer, answer_hash, question_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE points = VALUES(points), level = VALUES(level), answer = VALUES(answer), answer_hash = VALUES(answer_hash), question_url = VALUES(question_url), sort_order = VALUES(sort_order)`,
+    [title, points, points <= 300 ? 'easy' : points <= 700 ? 'medium' : 'hard', answer, hashAnswer(answer), url, i],
   )
 }
 console.log(`Flags in place: ${FLAGS.length}.`)

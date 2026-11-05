@@ -19,7 +19,6 @@ export function AdminPage() {
         </a>
         <span className="dash-session adm-session"><ShieldIcon /> {session.admin.email}</span>
         <nav className="dash-actions" aria-label="Account">
-          <a className="dash-logout" href="/" onClick={onLinkClick} title="Open the public site">site</a>
           <button className="dash-logout" type="button" onClick={() => { signOut(); navigate('/admin', true) }}><LogoutIcon /> Logout</button>
         </nav>
       </header>

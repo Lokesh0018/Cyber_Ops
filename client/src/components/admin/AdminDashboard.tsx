@@ -4,7 +4,7 @@ import { CloseIcon, PlusIcon, SearchIcon } from '../Icons'
 
 /* ───────────────────────── types ───────────────────────── */
 interface Student { id: number; fullName: string; email: string; phone: string; institution: string; branch: string; rollNumber: string; score: number; createdAt: string; solved: number; attempts: number }
-interface Flag { id: number; title: string; points: number; answer: string; questionUrl: string; sortOrder: number; attempts: number; captures: number }
+interface Flag { id: number; title: string; points: number; level: 'easy' | 'medium' | 'hard'; frozen: boolean; answer: string; questionUrl: string; sortOrder: number; attempts: number; captures: number }
 interface Submission { id: number; answer: string; correct: 0 | 1; created_at: string; student_id: number; student: string; email: string; flag_id: number; flag: string; points: number }
 interface Stats {
   students: number; points: number; colleges: number; flags: number; totalPoints: number; submissions: number; captures: number
@@ -284,7 +284,7 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
 }
 
 /* ───────────────────────── flags ───────────────────────── */
-const EMPTY_FLAG = { title: '', points: 100, answer: '', questionUrl: '', sortOrder: 0 }
+const EMPTY_FLAG = { title: '', points: 100, level: 'easy' as const, frozen: false, answer: '', questionUrl: '', sortOrder: 0 }
 
 function Flags({ notify }: { notify: (t: Toast) => void }) {
   const { api } = useAdmin()
@@ -294,6 +294,9 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
   const [del, setDel] = useState<Flag | null>(null)
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [ptsEdit, setPtsEdit] = useState<number | null>(null)
+  const [ptsDraft, setPtsDraft] = useState('')
+  const [ptsErr, setPtsErr] = useState('')
 
   const load = useCallback(() => {
     api<{ flags: Flag[] }>('/flags').then((d) => setRows(d.flags)).catch((e: Error) => notify({ kind: 'error', text: e.message }))
@@ -304,7 +307,7 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
     e.preventDefault()
     if (busy || !edit) return
     const fd = new FormData(e.currentTarget)
-    const body = { title: fd.get('title'), points: Number(fd.get('points')), answer: fd.get('answer'), questionUrl: fd.get('questionUrl'), sortOrder: Number(fd.get('sortOrder')) }
+    const body = { title: fd.get('title'), points: Number(fd.get('points')), level: fd.get('level'), frozen: fd.get('frozen') === 'on', answer: fd.get('answer'), questionUrl: fd.get('questionUrl'), sortOrder: Number(fd.get('sortOrder')) }
     setBusy(true); setErrors({})
     try {
       if (edit === 'new') { await api('/flags', { method: 'POST', body }); notify({ kind: 'ok', text: `${body.title} created.` }) }
@@ -322,14 +325,34 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
     catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
 
+  const toggleFreeze = async (f: Flag) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api(`/flags/${f.id}/freeze`, { method: 'PATCH', body: { frozen: !f.frozen } })
+      notify({ kind: 'ok', text: f.frozen ? `${f.title} unfrozen — submissions open.` : `${f.title} frozen — no one can submit.` }); load()
+    } catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
+  }
+
+  const savePoints = async (f: Flag) => {
+    if (busy) return
+    const pts = Number(ptsDraft)
+    if (!Number.isInteger(pts) || pts < 1 || pts > 100000) { setPtsErr('Whole number 1–100000.'); return }
+    if (pts === f.points) { setPtsEdit(null); return }
+    setBusy(true); setPtsErr('')
+    try {
+      await api(`/flags/${f.id}/points`, { method: 'PATCH', body: { points: pts } })
+      notify({ kind: 'ok', text: `${f.title} is now worth ${pts} pts.` }); setPtsEdit(null); load()
+    } catch (err) { setPtsErr((err as Error).message) } finally { setBusy(false) }
+  }
+
   const cur = edit && edit !== 'new' ? edit : { ...EMPTY_FLAG, sortOrder: rows?.length ?? 0 }
-  const tier = (p: number) => (p <= 300 ? 'easy' : p <= 700 ? 'medium' : 'hard')
   return (
     <section className="dcard dcard-wide" aria-labelledby="a-fl">
       <div className="dcard-head">
         <h2 id="a-fl" className="dcard-h"><span className="tp-dollar">$</span> ./flags --manage {rows && <span className="tmuted">({rows.length})</span>}</h2>
         <div className="adm-tools">
-          <span className="tmuted adm-small">levels by points: ≤300 easy · ≤700 medium · &gt;700 hard</span>
+          <span className="tmuted adm-small">frozen flags stay visible but accept no submissions</span>
           <button type="button" className="adm-btn primary" onClick={() => { setErrors({}); setEdit('new') }}><PlusIcon /> new flag</button>
         </div>
       </div>
@@ -339,13 +362,30 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
       {rows && rows.length > 0 && (
         <div className="adm-tablewrap">
           <table className="lb-table adm-table">
-            <thead><tr><th>order</th><th>flag</th><th>level</th><th>answer</th><th>question</th><th>solved</th><th className="sr-only">actions</th></tr></thead>
+            <thead><tr><th>order</th><th>flag</th><th>level</th><th>state</th><th>answer</th><th>question</th><th>solved</th><th className="sr-only">actions</th></tr></thead>
             <tbody>
               {rows.map((f) => (
                 <tr key={f.id}>
                   <td>{f.sortOrder}</td>
-                  <td><b>{f.title}</b><br /><span className="tmuted adm-small">{f.points} pts</span></td>
-                  <td><span className={`adm-lvl t-${tier(f.points)}`}>{tier(f.points)}</span></td>
+                  <td>
+                    <b>{f.title}</b><br />
+                    {ptsEdit === f.id ? (
+                      <form className="adm-ptsform" onSubmit={(e) => { e.preventDefault(); savePoints(f) }} noValidate>
+                        <label className="sr-only" htmlFor={`pts-${f.id}`}>Points for {f.title}</label>
+                        <input id={`pts-${f.id}`} type="number" min={1} max={100000} step={1} value={ptsDraft} onChange={(e) => { setPtsDraft(e.target.value); setPtsErr('') }}
+                          onKeyDown={(e) => { if (e.key === 'Escape') setPtsEdit(null) }} aria-invalid={!!ptsErr} autoFocus />
+                        <button type="submit" className="adm-btn sm primary" disabled={busy} aria-busy={busy}>{busy ? '…' : 'save'}</button>
+                        <button type="button" className="adm-btn sm" onClick={() => setPtsEdit(null)} disabled={busy}>cancel</button>
+                      </form>
+                    ) : (
+                      <button type="button" className="adm-pts" onClick={() => { setPtsDraft(String(f.points)); setPtsErr(''); setPtsEdit(f.id) }} aria-label={`Edit points for ${f.title}, currently ${f.points}`} title="Edit points">
+                        {f.points} pts <span aria-hidden="true">✎</span>
+                      </button>
+                    )}
+                    {ptsEdit === f.id && ptsErr && <span className="adm-ptserr" role="alert">{ptsErr}</span>}
+                  </td>
+                  <td><span className={`adm-lvl t-${f.level}`}>{f.level}</span></td>
+                  <td>{f.frozen ? <span className="adm-state frozen">[❄] frozen</span> : <span className="adm-state live">[●] live</span>}</td>
                   <td>
                     <span className="adm-answer">
                       <code>{reveal[f.id] ? f.answer || <i className="tmuted">(not set)</i> : '••••••••••'}</code>
@@ -355,6 +395,7 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
                   <td>{f.questionUrl ? <a className="adm-link" href={f.questionUrl} target="_blank" rel="noopener noreferrer">{f.questionUrl.replace(/^https?:\/\//, '').slice(0, 36)}{f.questionUrl.length > 44 ? '…' : ''}</a> : <span className="tmuted">—</span>}</td>
                   <td>{f.captures} <span className="tmuted adm-small">/ {f.attempts} tries</span></td>
                   <td className="adm-rowactions">
+                    <button type="button" className={`adm-btn sm${f.frozen ? ' warm' : ' cold'}`} onClick={() => toggleFreeze(f)} disabled={busy} aria-pressed={f.frozen}>{f.frozen ? 'unfreeze' : 'freeze'}</button>
                     <button type="button" className="adm-btn sm" onClick={() => { setErrors({}); setEdit(f) }}>edit</button>
                     <button type="button" className="adm-btn sm danger" onClick={() => setDel(f)}>delete</button>
                   </td>
@@ -369,7 +410,17 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
         <Modal title={edit === 'new' ? 'flags --new' : `flags --edit "${edit.title}"`} onClose={() => setEdit(null)}>
           <form className="adm-form-grid" onSubmit={save} noValidate>
             <Field id="fl-title" label="Title" error={errors.title}><input id="fl-title" name="title" defaultValue={cur.title} maxLength={80} required autoFocus /></Field>
-            <Field id="fl-points" label="Points" error={errors.points} hint="Decides the level: ≤300 easy, ≤700 medium, else hard"><input id="fl-points" name="points" type="number" min={1} step={1} defaultValue={cur.points} required /></Field>
+            <Field id="fl-points" label="Points" error={errors.points}><input id="fl-points" name="points" type="number" min={1} step={1} defaultValue={cur.points} required /></Field>
+            <Field id="fl-level" label="Level" error={errors.level} hint="Groups the flag on the student board">
+              <select id="fl-level" name="level" defaultValue={cur.level} required>
+                <option value="easy">easy · level 1 · recon</option>
+                <option value="medium">medium · level 2 · exploit</option>
+                <option value="hard">hard · level 3 · privesc</option>
+              </select>
+            </Field>
+            <div className="adm-field adm-check">
+              <label htmlFor="fl-frozen"><input id="fl-frozen" name="frozen" type="checkbox" defaultChecked={cur.frozen} /> Frozen — visible to students, submissions paused</label>
+            </div>
             <Field id="fl-answer" label="Answer (flag)" error={errors.answer} hint="Compared case-insensitively, whitespace trimmed. Changing it does not undo past captures."><input id="fl-answer" name="answer" defaultValue={cur.answer} placeholder="CYBEROPS{…}" maxLength={200} spellCheck={false} autoComplete="off" required /></Field>
             <Field id="fl-url" label="Question / assets URL" error={errors.questionUrl} hint="Opens from the [?] button on the student board"><input id="fl-url" name="questionUrl" type="url" defaultValue={cur.questionUrl} placeholder="https://… or /#ctf" maxLength={300} /></Field>
             <Field id="fl-order" label="Sort order" hint="Lower prints first within its level"><input id="fl-order" name="sortOrder" type="number" step={1} defaultValue={cur.sortOrder} /></Field>

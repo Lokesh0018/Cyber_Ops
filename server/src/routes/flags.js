@@ -13,7 +13,7 @@ export const hashAnswer = (v) => createHash('sha256').update(normalize(v)).diges
 // GET /api/flags — every flag with this student's progress (attempts used, solved). Answers never leave the server.
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const [flags] = await pool.query('SELECT id, title, points, question_url FROM flags ORDER BY sort_order ASC, id ASC')
+    const [flags] = await pool.query('SELECT id, title, points, level, frozen, question_url FROM flags ORDER BY sort_order ASC, id ASC')
     const [subs] = await pool.query(
       'SELECT flag_id, COUNT(*) AS attempts, MAX(correct) AS solved, MAX(created_at) AS last FROM submissions WHERE student_id = ? GROUP BY flag_id',
       [req.studentId],
@@ -23,7 +23,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       maxAttempts: MAX_ATTEMPTS,
       flags: flags.map((f) => {
         const s = byFlag.get(f.id)
-        return { ...f, attempts: Number(s?.attempts ?? 0), solved: !!Number(s?.solved ?? 0), lastAt: s?.last ?? null }
+        return { ...f, frozen: !!Number(f.frozen), attempts: Number(s?.attempts ?? 0), solved: !!Number(s?.solved ?? 0), lastAt: s?.last ?? null }
       }),
     })
   } catch (err) {
@@ -40,8 +40,9 @@ router.post('/:id/submit', requireAuth, async (req, res, next) => {
     if (!answer.trim()) return res.status(422).json({ message: 'Paste the flag first.' })
 
     await conn.beginTransaction()
-    const [[flag]] = await conn.query('SELECT id, title, points, answer_hash FROM flags WHERE id = ? FOR UPDATE', [flagId])
+    const [[flag]] = await conn.query('SELECT id, title, points, answer_hash, frozen FROM flags WHERE id = ? FOR UPDATE', [flagId])
     if (!flag) { await conn.rollback(); return res.status(404).json({ message: 'Unknown flag.' }) }
+    if (Number(flag.frozen)) { await conn.rollback(); return res.status(423).json({ message: 'This flag is frozen by the organisers. Submissions are paused.', frozen: true }) }
 
     const [[st]] = await conn.query(
       'SELECT COUNT(*) AS attempts, COALESCE(MAX(correct), 0) AS solved FROM submissions WHERE student_id = ? AND flag_id = ? FOR UPDATE',

@@ -73,4 +73,9 @@ export async function ensureSchema() {
     ['flags'],
   )
   if (!fcols.some((c) => c.COLUMN_NAME === 'answer')) await pool.query("ALTER TABLE flags ADD COLUMN answer VARCHAR(200) NOT NULL DEFAULT '' AFTER points")
+  if (!fcols.some((c) => c.COLUMN_NAME === 'level')) {
+    await pool.query("ALTER TABLE flags ADD COLUMN level ENUM('easy','medium','hard') NOT NULL DEFAULT 'easy' AFTER points")
+    await pool.query("UPDATE flags SET level = CASE WHEN points <= 300 THEN 'easy' WHEN points <= 700 THEN 'medium' ELSE 'hard' END")
+  }
+  if (!fcols.some((c) => c.COLUMN_NAME === 'frozen')) await pool.query('ALTER TABLE flags ADD COLUMN frozen TINYINT(1) NOT NULL DEFAULT 0 AFTER level')
 }

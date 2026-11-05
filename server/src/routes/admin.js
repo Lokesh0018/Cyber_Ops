@@ -164,8 +164,9 @@ router.delete('/students/:id', async (req, res, next) => {
 const FLAG_SQL = `
   SELECT f.*, COUNT(s.id) AS attempts, COALESCE(SUM(s.correct),0) AS captures
     FROM flags f LEFT JOIN submissions s ON s.flag_id = f.id`
+const LEVELS = ['easy', 'medium', 'hard']
 const publicFlag = (r) => ({
-  id: r.id, title: r.title, points: r.points, answer: r.answer ?? '', questionUrl: r.question_url, sortOrder: r.sort_order,
+  id: r.id, title: r.title, points: r.points, level: r.level ?? 'easy', frozen: !!Number(r.frozen), answer: r.answer ?? '', questionUrl: r.question_url, sortOrder: r.sort_order,
   attempts: Number(r.attempts ?? 0), captures: Number(r.captures ?? 0),
 })
 
@@ -174,6 +175,7 @@ function validateFlag(b) {
   if (!b.title || String(b.title).trim().length < 2 || String(b.title).trim().length > 80) e.title = 'Title: 2–80 characters.'
   const pts = Number(b.points)
   if (!Number.isInteger(pts) || pts < 1 || pts > 100000) e.points = 'Points: whole number 1–100000.'
+  if (!LEVELS.includes(b.level)) e.level = 'Pick easy, medium or hard.'
   if (!b.answer || !String(b.answer).trim()) e.answer = 'Answer is required.'
   else if (String(b.answer).trim().length > 200) e.answer = 'Answer: max 200 characters.'
   if (b.questionUrl && String(b.questionUrl).length > 300) e.questionUrl = 'URL: max 300 characters.'
@@ -200,8 +202,8 @@ router.post('/flags', async (req, res, next) => {
     const [[{ next: order }]] = await pool.query('SELECT COALESCE(MAX(sort_order),-1)+1 AS next FROM flags')
     const answer = String(b.answer).trim()
     const [r] = await pool.query(
-      'INSERT INTO flags (title, points, answer, answer_hash, question_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-      [title, Number(b.points), answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), b.sortOrder != null ? Number(b.sortOrder) : order],
+      'INSERT INTO flags (title, points, level, frozen, answer, answer_hash, question_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, Number(b.points), b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), b.sortOrder != null ? Number(b.sortOrder) : order],
     )
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [r.insertId])
     res.status(201).json({ flag: publicFlag(row) })
@@ -220,9 +222,33 @@ router.put('/flags/:id', async (req, res, next) => {
     if (dupes.length) return res.status(409).json({ message: 'A flag with this title exists.', errors: { title: 'Title already used.' } })
     const answer = String(b.answer).trim()
     const [r] = await pool.query(
-      'UPDATE flags SET title = ?, points = ?, answer = ?, answer_hash = ?, question_url = ?, sort_order = ? WHERE id = ?',
-      [title, Number(b.points), answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
+      'UPDATE flags SET title = ?, points = ?, level = ?, frozen = ?, answer = ?, answer_hash = ?, question_url = ?, sort_order = ? WHERE id = ?',
+      [title, Number(b.points), b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
     )
+    if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
+    const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
+    res.json({ flag: publicFlag(row) })
+  } catch (err) { next(err) }
+})
+
+// PATCH /api/admin/flags/:id/freeze { frozen } — pause/resume submissions for one flag
+router.patch('/flags/:id/freeze', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const [r] = await pool.query('UPDATE flags SET frozen = ? WHERE id = ?', [req.body?.frozen ? 1 : 0, id])
+    if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
+    const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
+    res.json({ flag: publicFlag(row) })
+  } catch (err) { next(err) }
+})
+
+// PATCH /api/admin/flags/:id/points { points } — quick edit of a flag's value (scores already awarded are not recalculated)
+router.patch('/flags/:id/points', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const pts = Number(req.body?.points)
+    if (!Number.isInteger(pts) || pts < 1 || pts > 100000) return res.status(422).json({ message: 'Points: whole number 1–100000.', errors: { points: 'Points: whole number 1–100000.' } })
+    const [r] = await pool.query('UPDATE flags SET points = ? WHERE id = ?', [pts, id])
     if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
     res.json({ flag: publicFlag(row) })
