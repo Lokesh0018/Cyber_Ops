@@ -1481,11 +1481,105 @@ html:has(.authpage){scrollbar-gutter:stable}
 
 /* ══════════ admin console ══════════ */
 .adm-login{display:grid;place-items:center}
-.adm-win{max-width:460px;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(0,184,255,.08)}
-.adm-form{display:flex;flex-direction:column;gap:14px;padding:22px 22px 20px;font-family:var(--m)}
-.adm-h1{display:flex;align-items:center;gap:10px;font-family:var(--d);font-size:1.45rem;margin:4px 0 0;color:var(--term-text)}
-.adm-h1 .ico{width:22px;height:22px;color:var(--term-cyan)}
-.adm-sub{font-size:.8rem;margin:-6px 0 4px}
+.adm-win{max-width:440px;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 60px rgba(0,184,255,.08),0 0 0 1px rgba(0,184,255,.08)}
+.adm-form{display:flex;flex-direction:column;gap:18px;padding:28px 28px 24px;font-family:var(--m)}
+.adm-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+.adm-badge{position:relative;display:grid;place-items:center;width:68px;height:68px;margin-bottom:6px;border-radius:18px;
+  border:1px solid var(--term-border);background:radial-gradient(circle at 50% 30%,rgba(0,184,255,.18),rgba(0,184,255,.04));box-shadow:0 0 28px rgba(0,184,255,.15)}
+.adm-badge img{width:44px;height:44px;object-fit:contain}
+.adm-badge i{position:absolute;right:-8px;bottom:-8px;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+  background:var(--term-bg);border:1px solid var(--term-border);color:var(--term-cyan)}
+.adm-badge i .ico{width:14px;height:14px}
+.adm-h1{font-family:var(--d);font-size:1.5rem;line-height:1.2;margin:0;color:var(--term-text)}
+.adm-sub{font-size:.8rem;line-height:1.5;margin:0;max-width:32ch;color:var(--term-muted)}
+.adm-status{display:flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:7px 12px;border-radius:8px;
+  border:1px solid rgba(16,231,160,.22);background:rgba(16,231,160,.05);color:var(--term-muted);font-size:.7rem;letter-spacing:.04em}
+.adm-pulse{width:7px;height:7px;border-radius:50%;background:var(--term-green);box-shadow:0 0 8px var(--term-green)}
+.adm-sep{color:var(--term-dim)}
+.adm-caps{margin:4px 0 0;font-size:.72rem;color:var(--term-amber)}
+.adm-login .tinput:-webkit-autofill{-webkit-text-fill-color:var(--term-text);transition:background-color 9999s ease-in-out 0s;box-shadow:inset 0 0 0 40px #0a1424}
+.adm-login .tline{border-color:rgba(66,153,225,.18);background:rgba(255,255,255,.02)}
+.adm-login .tfield.err .tline{background:rgba(255,100,124,.05)}
+.adm-win{position:relative}
+.adm-win::before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--term-cyan),transparent);box-shadow:0 0 14px rgba(0,184,255,.7)}
+.adm-win::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px)}
+.adm-lock{color:var(--term-amber)}
+.adm-lock .dot{background:var(--term-amber);box-shadow:0 0 8px var(--term-amber)}
+.adm-login .tfield .tprompt{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase}
+.adm-login .tline{min-height:46px;margin-left:0;padding:0 12px}
+.adm-login .tbtn{margin-top:2px}
+.adm-login .tbtn::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.18) 50%,transparent 65%);transform:translateX(-120%)}
+.adm-login .tbtn{position:relative;overflow:hidden}
+.adm-login .tbtn:hover::after{transform:translateX(120%);transition:transform .6s ease}
+.adm-back a{display:inline-flex;align-items:center;min-height:32px;padding:0 8px;border-radius:6px}
+.adm-back a:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+.adm-foot{margin:0;padding-top:14px;border-top:1px dashed rgba(66,153,225,.18);text-align:center;font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--term-dim)}
+/* Kali Linux dragon (assets/kali-linux.svg) tinted Kali blue via mask */
+.adm-login{--kali:#367bf0;--kali-soft:#6ea0ff}
+.adm-dragon,.adm-dragon-bg{background:linear-gradient(160deg,var(--kali-soft),var(--kali));
+  -webkit-mask:url('./assets/kali-linux.svg') center/contain no-repeat;mask:url('./assets/kali-linux.svg') center/contain no-repeat}
+.adm-dragon{width:40px;height:40px;filter:drop-shadow(0 0 10px rgba(54,123,240,.55))}
+.adm-dragon-bg{position:absolute;z-index:0;pointer-events:none;right:max(-120px,-8vw);bottom:-60px;width:min(560px,90vw);aspect-ratio:1;opacity:.07}
+.adm-login .adm-badge{border-color:rgba(54,123,240,.45);background:radial-gradient(circle at 50% 25%,rgba(54,123,240,.28),rgba(54,123,240,.05));box-shadow:0 0 34px rgba(54,123,240,.25)}
+.adm-login .adm-badge i{color:var(--kali-soft);border-color:rgba(54,123,240,.45)}
+.adm-chip{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--kali-soft);border:1px solid rgba(54,123,240,.35);background:rgba(54,123,240,.08)}
+.adm-chip img{border-radius:4px}
+.adm-login .adm-win{border-color:rgba(54,123,240,.35);box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 70px rgba(54,123,240,.14)}
+.adm-login .adm-win::before{background:linear-gradient(90deg,transparent,var(--kali),transparent);box-shadow:0 0 14px rgba(54,123,240,.8)}
+.adm-login .tline:focus-within{border-color:rgba(54,123,240,.65);background:rgba(54,123,240,.07)}
+.adm-login .tcaret{background:var(--kali-soft);box-shadow:0 0 8px rgba(54,123,240,.7)}
+.adm-login .tfield:focus-within .tprompt .tp-cmd{text-shadow:0 0 10px rgba(54,123,240,.7)}
+.adm-login .tbtn{background:linear-gradient(100deg,#2c63c4,var(--kali));border-color:rgba(110,160,255,.6);box-shadow:0 10px 28px rgba(54,123,240,.28),inset 0 1px 0 rgba(255,255,255,.14)}
+.adm-login .tbtn:hover{box-shadow:0 0 0 1px rgba(110,160,255,.3),0 14px 34px rgba(54,123,240,.4),inset 0 1px 0 rgba(255,255,255,.14)}
+.adm-login .tbtn:focus-visible{box-shadow:0 0 0 3px rgba(110,160,255,.45)}
+.adm-foot{display:flex;align-items:center;justify-content:center;gap:8px}
+.adm-foot .adm-pulse{flex-shrink:0}
+/* page background: layered Kali-blue glows, drifting grid, slow scan line, vignette */
+.adm-login{background:
+    radial-gradient(1000px 600px at 15% -10%,rgba(54,123,240,.18),transparent 60%),
+    radial-gradient(800px 600px at 100% 100%,rgba(54,123,240,.14),transparent 60%),
+    radial-gradient(500px 400px at 50% 55%,rgba(54,123,240,.07),transparent 70%),
+    linear-gradient(180deg,#070d1a,#050912)}
+.adm-login::before{opacity:.7;background-image:linear-gradient(rgba(110,160,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(110,160,255,.07) 1px,transparent 1px);
+  background-size:48px 48px;mask-image:radial-gradient(ellipse 75% 70% at 50% 50%,#000 20%,transparent 100%);-webkit-mask-image:radial-gradient(ellipse 75% 70% at 50% 50%,#000 20%,transparent 100%)}
+.adm-login::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(2,5,12,.75) 100%)}
+.adm-dragon-bg{right:50%;bottom:50%;transform:translate(50%,50%);width:min(780px,120vw);opacity:.055;filter:blur(.4px)}
+/* Fit the viewport exactly: no page scroll. Spacing scales with screen height; optional bits drop out on short screens. */
+html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
+.authpage.adm-login{height:100vh;height:100dvh;min-height:0;overflow:hidden;padding:12px}
+.adm-login .adm-win{max-height:calc(100dvh - 24px)}
+.adm-login .adm-form{gap:clamp(8px,2vh,18px);padding:clamp(14px,3.2vh,28px) clamp(18px,3vw,28px) clamp(12px,2.6vh,24px)}
+.adm-login .adm-badge{width:clamp(48px,9vh,68px);height:clamp(48px,9vh,68px);margin-bottom:clamp(0px,.8vh,6px)}
+.adm-login .adm-badge img{width:62%;height:62%}
+.adm-login .adm-h1{font-size:clamp(1.2rem,3.2vh,1.5rem)}
+.adm-login .adm-foot{padding-top:clamp(6px,1.6vh,14px)}
+.adm-login .term-toast-slot{min-height:26px;margin:0}
+@media (max-height:760px){.adm-login .adm-chip{display:none}}
+@media (max-height:660px){.adm-login .adm-sub{display:none}.adm-login .adm-foot{display:none}}
+@media (max-height:540px){.adm-login .adm-badge{display:none}.adm-login .tline{min-height:40px}}
+/* matrix code rain canvas: sits above the glows, below the card, faded toward the card centre so the form stays readable */
+.adm-rain{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.5;
+  -webkit-mask-image:radial-gradient(ellipse 55% 60% at 50% 50%,transparent 0%,rgba(0,0,0,.35) 60%,#000 100%);
+  mask-image:radial-gradient(ellipse 55% 60% at 50% 50%,transparent 0%,rgba(0,0,0,.35) 60%,#000 100%)}
+@media (prefers-reduced-motion:no-preference){
+  .adm-login::before{animation:admGrid 24s linear infinite}
+  .adm-dragon-bg{animation:admBreathe 9s ease-in-out infinite}
+  @keyframes admGrid{to{background-position:48px 48px,48px 48px}}
+  @keyframes admBreathe{50%{opacity:.09}}
+}
+@media (max-width:480px){.adm-form{padding:22px 18px 18px}}
+@media (prefers-reduced-motion:no-preference){
+  .adm-win{animation:admIn .45s cubic-bezier(.22,1,.36,1) both}
+  .adm-form.shake{animation:admShake .4s ease}
+  @keyframes admIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @keyframes admShake{20%{transform:translateX(-6px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+}
+@media (prefers-reduced-motion:no-preference){.adm-pulse{animation:admPulse 2s ease-in-out infinite}@keyframes admPulse{50%{opacity:.35}}}
 .adm-eye{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;border-radius:7px;background:none;color:var(--term-muted);cursor:pointer}
 .adm-eye:hover{color:var(--term-cyan);background:rgba(0,184,255,.08)}
 .adm-eye:focus-visible{outline:2px solid var(--term-cyan)}
