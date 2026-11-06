@@ -73,7 +73,9 @@ router.post('/:id/submit', requireAuth, submitLimit, async (req, res, next) => {
     if (correct) invalidateBoard() // a capture changes the ranking and the score-over-time chart
     const attempts = Number(st.attempts) + 1
     res.json(correct
-      ? { correct: true, attempts, points: flag.points, message: `Correct — +${flag.points} points.` }
+      ? paid
+        ? { correct: true, attempts, points: flag.points, message: `Correct — +${flag.points} points.` }
+        : { correct: true, attempts, points: 0, message: 'Correct — the organisers kept your points for this flag, so nothing more is added.' }
       : { correct: false, attempts, message: attempts >= MAX_ATTEMPTS ? 'Incorrect. No attempts left.' : `Incorrect. ${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? '' : 's'} left.` })
   } catch (err) {
     await conn.rollback().catch(() => {})
