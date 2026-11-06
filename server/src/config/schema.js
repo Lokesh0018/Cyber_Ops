@@ -73,11 +73,28 @@ export async function ensureSchema() {
       id         INT UNSIGNED  NOT NULL AUTO_INCREMENT,
       student_email VARCHAR(190) NOT NULL,
       points     INT           NOT NULL,
+      flag_id    INT UNSIGNED  NULL,
       note       VARCHAR(120)  NOT NULL DEFAULT '',
       created_at TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       KEY ix_events_student_time (student_email, created_at),
-      CONSTRAINT fk_score_student FOREIGN KEY (student_email) REFERENCES students(email) ON DELETE CASCADE ON UPDATE CASCADE
+      KEY ix_events_flag (flag_id, student_email),
+      CONSTRAINT fk_score_student FOREIGN KEY (student_email) REFERENCES students(email) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_score_flag    FOREIGN KEY (flag_id)       REFERENCES flags(id)       ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
+
+  // Upgrade for databases created before score_events.flag_id existed: add the column, then link old awards/refunds to their flag by note.
+  // (flag_id lets a points change re-score each solver by exactly what they were credited for that flag.)
+  const [fid] = await pool.query(
+    "SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'score_events' AND COLUMN_NAME = 'flag_id' LIMIT 1",
+  )
+  if (!fid.length) {
+    await pool.query(
+      'ALTER TABLE score_events ADD COLUMN flag_id INT UNSIGNED NULL AFTER student_email, ADD KEY ix_events_flag (flag_id, student_email), ' +
+      'ADD CONSTRAINT fk_score_flag FOREIGN KEY (flag_id) REFERENCES flags(id) ON DELETE SET NULL',
+    )
+    await pool.query('UPDATE score_events e JOIN flags f ON e.note = f.title SET e.flag_id = f.id WHERE e.flag_id IS NULL AND e.points > 0')
+    await pool.query("UPDATE score_events e JOIN flags f ON e.note = CONCAT('Removed capture: ', f.title) SET e.flag_id = f.id WHERE e.flag_id IS NULL AND e.points < 0")
+  }
 }

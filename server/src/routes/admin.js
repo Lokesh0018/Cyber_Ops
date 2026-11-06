@@ -271,7 +271,8 @@ function validateFlag(b) {
 router.get('/flags', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(`${FLAG_SQL} GROUP BY f.id ORDER BY f.sort_order ASC, f.id ASC`)
-    res.json({ flags: rows.map(publicFlag), maxAttempts: MAX_ATTEMPTS })
+    const [[{ n: students }]] = await pool.query('SELECT COUNT(*) AS n FROM students')
+    res.json({ flags: rows.map(publicFlag), maxAttempts: MAX_ATTEMPTS, students: Number(students) })
   } catch (err) { next(err) }
 })
 
@@ -295,25 +296,52 @@ router.post('/flags', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// When a flag's points change, everyone who already captured it is re-scored so they hold exactly the new value for it.
+// Each solver is adjusted by (new points - what they were actually credited for this flag, from score_events.flag_id), so it also
+// repairs any past drift (e.g. the value was edited before re-scoring existed). Every change is logged as a score event, keeping
+// students.score equal to the sum of score_events. Runs on the caller's connection, inside its transaction.
+async function rescoreSolvers(conn, flagId, title, newPts) {
+  const [solvers] = await conn.query(
+    `SELECT s.student_email, COALESCE(SUM(e.points), 0) AS credited
+       FROM (SELECT DISTINCT student_email FROM submissions WHERE flag_id = ? AND correct = 1) s
+       LEFT JOIN score_events e ON e.student_email = s.student_email AND e.flag_id = ?
+      GROUP BY s.student_email`,
+    [flagId, flagId],
+  )
+  const changes = solvers.map((r) => ({ email: r.student_email, from: Number(r.credited), delta: newPts - Number(r.credited) })).filter((c) => c.delta !== 0)
+  for (const c of changes) {
+    await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [c.delta, c.email])
+    await conn.query('INSERT INTO score_events (student_email, points, note, flag_id) VALUES (?, ?, ?, ?)', [c.email, c.delta, `Points changed: ${title} (${c.from} → ${newPts})`.slice(0, 120), flagId])
+  }
+  const deltas = new Set(changes.map((c) => c.delta))
+  return { rescored: changes.length, delta: deltas.size === 1 ? changes[0].delta : null } // delta is null when solvers moved by different amounts
+}
+
 // PUT /api/admin/flags/:id
 router.put('/flags/:id', async (req, res, next) => {
+  const conn = await pool.getConnection()
   try {
     const id = Number(req.params.id)
     const b = req.body ?? {}
     const errors = validateFlag(b)
     if (Object.keys(errors).length) return res.status(422).json({ message: 'Fix the highlighted fields.', errors })
     const title = String(b.title).trim()
-    const [dupes] = await pool.query('SELECT id FROM flags WHERE title = ? AND id <> ? LIMIT 1', [title, id])
-    if (dupes.length) return res.status(409).json({ message: 'A flag with this title exists.', errors: { title: 'Title already used.' } })
+    const newPts = Number(b.points)
+    await conn.beginTransaction()
+    const [[old]] = await conn.query('SELECT id, title, points FROM flags WHERE id = ? FOR UPDATE', [id])
+    if (!old) { await conn.rollback(); return res.status(404).json({ message: 'Flag not found.' }) }
+    const [dupes] = await conn.query('SELECT id FROM flags WHERE title = ? AND id <> ? LIMIT 1', [title, id])
+    if (dupes.length) { await conn.rollback(); return res.status(409).json({ message: 'A flag with this title exists.', errors: { title: 'Title already used.' } }) }
     const answer = String(b.answer).trim()
-    const [r] = await pool.query(
+    await conn.query(
       'UPDATE flags SET title = ?, points = ?, level = ?, frozen = ?, answer = ?, answer_hash = ?, question_url = ?, sort_order = ? WHERE id = ?',
-      [title, Number(b.points), b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
+      [title, newPts, b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
     )
-    if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
+    const { rescored, delta } = await rescoreSolvers(conn, id, title, newPts)
+    await conn.commit()
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
-    res.json({ flag: publicFlag(row) })
-  } catch (err) { next(err) }
+    res.json({ flag: publicFlag(row), rescored, delta })
+  } catch (err) { await conn.rollback().catch(() => {}); next(err) } finally { conn.release() }
 })
 
 // PATCH /api/admin/flags/:id/freeze { frozen } — pause/resume submissions for one flag
@@ -327,17 +355,22 @@ router.patch('/flags/:id/freeze', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// PATCH /api/admin/flags/:id/points { points } — quick edit of a flag's value (scores already awarded are not recalculated)
+// PATCH /api/admin/flags/:id/points { points } — quick edit of a flag's value; everyone who already captured it is re-scored by the difference
 router.patch('/flags/:id/points', async (req, res, next) => {
+  const conn = await pool.getConnection()
   try {
     const id = Number(req.params.id)
     const pts = Number(req.body?.points)
     if (!Number.isInteger(pts) || pts < 1 || pts > 100000) return res.status(422).json({ message: 'Points: whole number 1–100000.', errors: { points: 'Points: whole number 1–100000.' } })
-    const [r] = await pool.query('UPDATE flags SET points = ? WHERE id = ?', [pts, id])
-    if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
+    await conn.beginTransaction()
+    const [[old]] = await conn.query('SELECT id, title, points FROM flags WHERE id = ? FOR UPDATE', [id])
+    if (!old) { await conn.rollback(); return res.status(404).json({ message: 'Flag not found.' }) }
+    await conn.query('UPDATE flags SET points = ? WHERE id = ?', [pts, id])
+    const { rescored, delta } = await rescoreSolvers(conn, id, old.title, pts)
+    await conn.commit()
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
-    res.json({ flag: publicFlag(row) })
-  } catch (err) { next(err) }
+    res.json({ flag: publicFlag(row), rescored, delta })
+  } catch (err) { await conn.rollback().catch(() => {}); next(err) } finally { conn.release() }
 })
 
 // DELETE /api/admin/flags/:id — cascades to submissions (scores already awarded are kept)
@@ -379,7 +412,7 @@ router.delete('/submissions/:id', async (req, res, next) => {
     const refund = req.query.refund === '1'
     await conn.beginTransaction()
     const [[sub]] = await conn.query(
-      `SELECT s.id, s.student_email, s.correct, f.title, f.points
+      `SELECT s.id, s.student_email, s.flag_id, s.correct, f.title, f.points
          FROM submissions s JOIN flags f ON f.id = s.flag_id WHERE s.id = ? FOR UPDATE`,
       [id],
     )
@@ -387,13 +420,10 @@ router.delete('/submissions/:id', async (req, res, next) => {
     await conn.query('DELETE FROM submissions WHERE id = ?', [id])
     let refunded = 0
     if (refund && Number(sub.correct)) {
-      // refund what was actually awarded for this capture (the flag's points may have been edited since); fall back to the flag's current value
-      const [[ev]] = await conn.query(
-        'SELECT points FROM score_events WHERE student_email = ? AND note = ? AND points > 0 ORDER BY id DESC LIMIT 1',
-        [sub.student_email, sub.title],
-      )
-      refunded = Number(ev?.points ?? sub.points)
-      await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [sub.student_email, -refunded, `Removed capture: ${sub.title}`.slice(0, 120)])
+      // take back exactly what this student was credited for the flag (award + any later points changes); fall back to its current value
+      const [[cr]] = await conn.query('SELECT COUNT(*) AS n, COALESCE(SUM(points), 0) AS total FROM score_events WHERE student_email = ? AND flag_id = ?', [sub.student_email, sub.flag_id])
+      refunded = Number(cr.n) ? Number(cr.total) : Number(sub.points)
+      await conn.query('INSERT INTO score_events (student_email, points, note, flag_id) VALUES (?, ?, ?, ?)', [sub.student_email, -refunded, `Removed capture: ${sub.title}`.slice(0, 120), sub.flag_id])
       await conn.query('UPDATE students SET score = score - ? WHERE email = ?', [refunded, sub.student_email])
     }
     await conn.commit()

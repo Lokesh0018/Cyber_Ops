@@ -1780,6 +1780,54 @@ html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
 .st-table tbody tr:hover{background:rgba(0,184,255,.045)}
 .st-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:36px 16px;text-align:center;border:1px dashed rgba(66,153,225,.25);border-radius:12px;margin-top:14px}
 .st-empty p{margin:0}
+/* ── admin flags tab (reuses the students table/cards styles; fl-* adds flag specifics) ── */
+.fl-table .adm-table{min-width:1040px}
+.fl-table col.c-fl-order{width:72px}
+.fl-table col.c-fl-state{width:116px}
+.fl-table col.c-fl-answer{width:228px}
+.fl-table col.c-fl-q{width:170px}
+.fl-table col.c-fl-solved{width:170px}
+.fl-table col.c-fl-actions{width:150px}
+.fl-warn{color:#8fd8ff!important}
+.fl-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
+.fl-name b{color:var(--term-text);font-size:.92rem}
+.fl-pts{display:block;margin-top:2px}
+.fl-card .fl-pts{margin-top:0}
+.fl-row.t-easy td:first-child{box-shadow:inset 3px 0 0 rgba(0,184,255,.75)}
+.fl-row.t-medium td:first-child{box-shadow:inset 3px 0 0 rgba(254,188,46,.75)}
+.fl-row.t-hard td:first-child{box-shadow:inset 3px 0 0 rgba(255,100,124,.8)}
+.fl-row.frozen td,.fl-card.frozen{background-image:repeating-linear-gradient(135deg,rgba(143,216,255,.04) 0 6px,transparent 6px 12px)}
+.fl-card.t-easy{border-left:3px solid rgba(0,184,255,.75)}
+.fl-card.t-medium{border-left:3px solid rgba(254,188,46,.75)}
+.fl-card.t-hard{border-left:3px solid rgba(255,100,124,.8)}
+.fl-card-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* live / frozen switch */
+.fl-switch{display:inline-flex;align-items:center;gap:9px;min-height:32px;padding:0 10px 0 4px;border-radius:999px;cursor:pointer;font:inherit;font-size:.72rem;font-weight:600;letter-spacing:.04em;
+  color:#8fd8ff;border:1px solid rgba(143,216,255,.35);background:rgba(143,216,255,.06);transition:background-color .2s ease,border-color .2s ease,color .2s ease}
+.fl-switch i{position:relative;flex-shrink:0;width:30px;height:18px;border-radius:999px;background:rgba(143,216,255,.25);transition:background-color .2s ease}
+.fl-switch i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#dce8f8;transition:transform .2s ease,background-color .2s ease}
+.fl-switch.on{color:var(--term-green);border-color:rgba(16,231,160,.4);background:rgba(16,231,160,.07)}
+.fl-switch.on i{background:rgba(16,231,160,.35)}
+.fl-switch.on i::after{transform:translateX(12px);background:var(--term-green)}
+.fl-switch:hover:not(:disabled){filter:brightness(1.15)}
+.fl-switch:focus-visible{outline:2px solid var(--term-cyan);outline-offset:2px}
+.fl-switch:disabled{cursor:progress;opacity:.6}
+/* answer + question */
+.fl-answer{display:flex;align-items:center;gap:6px}
+.fl-answer code{flex:1;min-width:0;padding:4px 9px;border-radius:7px;font-size:.76rem;color:var(--term-cyan);background:rgba(0,184,255,.07);border:1px solid rgba(0,184,255,.2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl-answer .adm-btn{flex-shrink:0;min-height:30px;padding:0 9px}
+.fl-link{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--term-cyan);font-size:.78rem;text-decoration:none}
+.fl-link:hover{text-decoration:underline;text-underline-offset:3px}
+.fl-link:focus-visible{outline:2px solid var(--term-cyan);outline-offset:3px;border-radius:3px}
+/* level filter chips get a colour dot; frozen gets the ice colour */
+.st-chips button[data-lvl]:not([data-lvl=all])::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--term-muted)}
+.st-chips button[data-lvl=easy]::before{background:var(--term-cyan)!important}
+.st-chips button[data-lvl=medium]::before{background:var(--term-amber)!important}
+.st-chips button[data-lvl=hard]::before{background:var(--term-red)!important}
+.st-chips button[data-lvl=frozen]::before{background:#8fd8ff!important}
+.st-chips button[data-lvl]{text-transform:capitalize}
+.fl-table .st-rank.rn,.fl-card .st-rank.rn{min-width:30px}
+@media (prefers-reduced-motion:reduce){.fl-switch,.fl-switch i,.fl-switch i::after{transition:none}}
 /* main students table: height-limited scroll area so the header really sticks, fixed column widths, quiet row actions */
 .st-table{max-height:min(640px,72vh);overflow:auto;border-radius:12px;border:1px solid rgba(66,153,225,.22);background:rgba(5,9,18,.35);scrollbar-width:thin}
 .st-table .adm-table{min-width:960px;table-layout:fixed;border-collapse:separate;border-spacing:0}
@@ -1992,6 +2040,8 @@ html:has(.adm-login),html:has(.adm-login) body{overflow:hidden}
 .adm-ptsform{display:inline-flex;align-items:center;gap:4px;margin-top:2px}
 .adm-ptsform input{width:84px;min-height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--term-cyan);background:rgba(0,184,255,.06);color:var(--term-text);font:inherit;font-size:.8rem}
 .adm-ptsform input:focus-visible{outline:2px solid var(--term-cyan);outline-offset:1px}
+.adm-ptsform input[aria-invalid=true]{border-color:var(--term-red);background:rgba(255,100,124,.08)}
+.adm-ptsform input.saving{opacity:.7;cursor:progress}
 .adm-ptserr{display:block;color:var(--term-red);font-size:.7rem;margin-top:2px}
 .adm-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;border-radius:8px;background:none;color:var(--term-muted);cursor:pointer}
 .adm-icon:hover{color:var(--term-text);background:rgba(255,255,255,.06)}

@@ -35,14 +35,21 @@ export function FlagBoard() {
   const [drafts, setDrafts] = useState<Record<number, string>>({})
   const userFolded = useRef<Set<string>>(new Set())
 
-  const load = () => {
+  const load = (quiet = false) => {
     if (!session) return
     fetch('/api/flags', { headers: { Authorization: `Bearer ${session.token}` } })
       .then(async (r) => { if (!r.ok) throw new Error('Flags unavailable right now.'); return (await r.json()) as Board })
-      .then(setBoard)
-      .catch((e: Error) => setError(e.message))
+      .then((b) => { setBoard(b); setError('') })
+      .catch((e: Error) => { if (!quiet) setError(e.message) }) // background refreshes keep the last good board on a hiccup
   }
-  useEffect(load, [session]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => load(), [session]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Keep flag points, frozen state and attempts live (e.g. when organisers change a flag's points): refresh every 10s while the tab is visible, and when it becomes visible again.
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') load(true) }
+    const id = window.setInterval(tick, 10_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', tick) }
+  }, [session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (e: FormEvent<HTMLFormElement>, flag: Flag) => {
     e.preventDefault()

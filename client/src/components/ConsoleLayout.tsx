@@ -22,21 +22,29 @@ export function ConsoleLayout({ page, children }: { page: ConsolePage; children:
       return
     }
     let cancelled = false
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${session.token}` } })
-      .then(async (r) => {
-        if (r.status === 401) throw new Error('expired')
-        if (!r.ok) return // transient server issue: keep showing the cached profile
-        const data = (await r.json()) as { student: Student }
-        if (!cancelled) signIn({ token: session.token, student: data.student })
-      })
-      .catch((e: Error) => {
-        if (e.message === 'expired') {
-          signOut()
-          navigate('/login', true)
-        }
-      })
-      .finally(() => !cancelled && setChecking(false))
-    return () => { cancelled = true }
+    // Re-check the token and refresh the stored profile (score, name, college...). Runs on load, every 15s while the tab is visible,
+    // and when it becomes visible again, so a score changed by organisers shows up without a manual reload. Only writes when something changed.
+    const refresh = () =>
+      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${session.token}` } })
+        .then(async (r) => {
+          if (r.status === 401) throw new Error('expired')
+          if (!r.ok) return // transient server issue: keep showing the cached profile
+          const data = (await r.json()) as { student: Student }
+          if (cancelled) return
+          const cur = (() => { try { return JSON.parse(localStorage.getItem('cyberops.auth') ?? 'null')?.student } catch { return null } })()
+          if (!cur || JSON.stringify(cur) !== JSON.stringify(data.student)) signIn({ token: session.token, student: data.student })
+        })
+        .catch((e: Error) => {
+          if (e.message === 'expired') {
+            signOut()
+            navigate('/login', true)
+          }
+        })
+    refresh().finally(() => !cancelled && setChecking(false))
+    const tick = () => { if (document.visibilityState === 'visible') void refresh() }
+    const id = window.setInterval(tick, 15_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => { cancelled = true; window.clearInterval(id); document.removeEventListener('visibilitychange', tick) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!student) return null

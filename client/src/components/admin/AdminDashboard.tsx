@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, useAdmin } from '../../hooks/useAdmin'
 import { CloseIcon, KeyIcon, ListIcon, PlusIcon, RadarIcon, SearchIcon, UserIcon } from '../Icons'
 import { Overview } from './AdminOverview'
@@ -381,7 +381,10 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
 }
 
 /* ───────────────────────── flags ───────────────────────── */
-const EMPTY_FLAG = { title: '', points: 100, level: 'easy' as const, frozen: false, answer: '', questionUrl: '', sortOrder: 0 }
+/** " 3 students re-scored (+100 each)." when changing a flag's points also changed scores of students who had already solved it. */
+const rescoreNote = (r: { rescored?: number; delta?: number }) =>
+  r.rescored ? ` ${r.rescored} student${r.rescored === 1 ? '' : 's'} who already solved it ${r.rescored === 1 ? 'was' : 'were'} re-scored (${(r.delta ?? 0) > 0 ? '+' : ''}${r.delta} each).` : ''
+const EMPTY_FLAG ={ title: '', points: 100, level: 'easy' as const, frozen: false, answer: '', questionUrl: '', sortOrder: 0 }
 
 function Flags({ notify }: { notify: (t: Toast) => void }) {
   const { api } = useAdmin()
@@ -394,9 +397,14 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
   const [ptsEdit, setPtsEdit] = useState<number | null>(null)
   const [ptsDraft, setPtsDraft] = useState('')
   const [ptsErr, setPtsErr] = useState('')
+  const [students, setStudents] = useState(0)
+  const [lvl, setLvl] = useState<'all' | 'easy' | 'medium' | 'hard' | 'frozen'>('all')
+  const [sort, setSort] = useState<'order' | 'points' | 'solved' | 'tries'>('order')
+  const [copied, setCopied] = useState<number | null>(null)
+  const ptsActive = useRef<number | null>(null) // id of the flag whose points editor is open; null once committed or cancelled
 
   const load = useCallback(() => {
-    api<{ flags: Flag[] }>('/flags').then((d) => setRows(d.flags)).catch((e: Error) => notify({ kind: 'error', text: e.message }))
+    api<{ flags: Flag[]; students?: number }>('/flags').then((d) => { setRows(d.flags); setStudents(d.students ?? 0) }).catch((e: Error) => notify({ kind: 'error', text: e.message }))
   }, [api, notify])
   useEffect(load, [load])
 
@@ -408,7 +416,10 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
     setBusy(true); setErrors({})
     try {
       if (edit === 'new') { await api('/flags', { method: 'POST', body }); notify({ kind: 'ok', text: `${body.title} created.` }) }
-      else { await api(`/flags/${edit.id}`, { method: 'PUT', body }); notify({ kind: 'ok', text: `${body.title} saved.` }) }
+      else {
+        const r = await api<{ rescored?: number; delta?: number }>(`/flags/${edit.id}`, { method: 'PUT', body })
+        notify({ kind: 'ok', text: `${body.title} saved.${rescoreNote(r)}` })
+      }
       setEdit(null); load()
     } catch (err) {
       setErrors((err as ApiError).errors ?? {})
@@ -431,76 +442,197 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
     } catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
 
+  // Inline points editor: no buttons. Enter or clicking away saves a changed value; Esc cancels; an invalid value keeps the editor open with an error.
+  const openPoints = (f: Flag) => { ptsActive.current = f.id; setPtsDraft(String(f.points)); setPtsErr(''); setPtsEdit(f.id) }
+  const closePoints = () => { ptsActive.current = null; setPtsErr(''); setPtsEdit(null) }
   const savePoints = async (f: Flag) => {
-    if (busy) return
-    const pts = Number(ptsDraft)
-    if (!Number.isInteger(pts) || pts < 1 || pts > 100000) { setPtsErr('Whole number 1–100000.'); return }
-    if (pts === f.points) { setPtsEdit(null); return }
+    if (ptsActive.current !== f.id) return // not editing this flag, or the commit was already claimed
+    const raw = ptsDraft.trim()
+    const pts = Number(raw)
+    if (raw === '' || !Number.isInteger(pts) || pts < 1 || pts > 100000) { setPtsErr('Whole number 1–100000.'); return }
+    if (pts === f.points) { closePoints(); return } // nothing changed: just leave edit mode
+    ptsActive.current = null // claim the commit so a second blur/submit can't save again
     setBusy(true); setPtsErr('')
     try {
-      await api(`/flags/${f.id}/points`, { method: 'PATCH', body: { points: pts } })
-      notify({ kind: 'ok', text: `${f.title} is now worth ${pts} pts.` }); setPtsEdit(null); load()
-    } catch (err) { setPtsErr((err as Error).message) } finally { setBusy(false) }
+      const r = await api<{ rescored?: number; delta?: number }>(`/flags/${f.id}/points`, { method: 'PATCH', body: { points: pts } })
+      notify({ kind: 'ok', text: `${f.title} is now worth ${pts} pts.${rescoreNote(r)}` }); setPtsEdit(null); load()
+    } catch (err) { ptsActive.current = f.id; setPtsErr((err as Error).message) } finally { setBusy(false) }
   }
+
+  const view = useMemo(() => {
+    const all = rows ?? []
+    const n = Math.max(1, students || Math.max(1, ...all.map((f) => f.captures))) // students who could solve it
+    const rate = (f: Flag) => Math.min(100, Math.round((f.captures / n) * 100))
+    const shown = all.filter((f) => (lvl === 'all' ? true : lvl === 'frozen' ? f.frozen : f.level === lvl))
+    const cmp: Record<typeof sort, (a: Flag, b: Flag) => number> = {
+      order: (a, b) => a.sortOrder - b.sortOrder || a.id - b.id,
+      points: (a, b) => b.points - a.points || a.sortOrder - b.sortOrder,
+      solved: (a, b) => b.captures - a.captures || a.sortOrder - b.sortOrder,
+      tries: (a, b) => b.attempts - a.attempts || a.sortOrder - b.sortOrder,
+    }
+    shown.sort(cmp[sort])
+    const attempts = all.reduce((a, f) => a + f.attempts, 0)
+    const captures = all.reduce((a, f) => a + f.captures, 0)
+    return {
+      n, rate, shown,
+      counts: { all: all.length, easy: all.filter((f) => f.level === 'easy').length, medium: all.filter((f) => f.level === 'medium').length, hard: all.filter((f) => f.level === 'hard').length, frozen: all.filter((f) => f.frozen).length },
+      points: all.reduce((a, f) => a + f.points, 0), attempts, captures,
+      avgRate: all.length ? Math.round(all.reduce((a, f) => a + rate(f), 0) / all.length) : 0,
+      hit: attempts ? Math.round((captures / attempts) * 100) : 0,
+    }
+  }, [rows, students, lvl, sort])
+
+  const copyAnswer = (f: Flag) => {
+    navigator.clipboard?.writeText(f.answer).then(() => { setCopied(f.id); window.setTimeout(() => setCopied((c) => (c === f.id ? null : c)), 1500) }).catch(() => {})
+  }
+  // clickable column header that drives the same sort as the dropdown
+  const flTh = (key: typeof sort, label: string) => (
+    <th aria-sort={sort === key ? (key === 'order' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`st-th${sort === key ? ' on' : ''}`} onClick={() => setSort(key)} title={`Sort by ${label}`}>{label}<i aria-hidden="true" /></button>
+    </th>
+  )
+
+  // pieces shared by the table row and the phone card
+  const pointsEditor = (f: Flag) => (
+    <>
+      {ptsEdit === f.id ? (
+        <form className="adm-ptsform" onSubmit={(e) => { e.preventDefault(); savePoints(f) }} noValidate>
+          <label className="sr-only" htmlFor={`pts-${f.id}`}>Points for {f.title}. Press Enter to save, Escape to cancel.</label>
+          <input id={`pts-${f.id}`} type="number" min={1} max={100000} step={1} inputMode="numeric" value={ptsDraft} readOnly={busy} autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => { setPtsDraft(e.target.value); setPtsErr('') }}
+            onBlur={() => { if (document.hasFocus()) savePoints(f) }} // clicking elsewhere commits; switching windows doesn't
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); closePoints() } }}
+            aria-invalid={!!ptsErr} aria-busy={busy} className={busy ? 'saving' : undefined} title="Enter to save · Esc to cancel" />
+        </form>
+      ) : (
+        <button type="button" className="adm-pts" onClick={() => openPoints(f)} aria-label={`Edit points for ${f.title}, currently ${f.points}`} title="Edit points">
+          {f.points.toLocaleString('en-IN')} pts <span aria-hidden="true">✎</span>
+        </button>
+      )}
+      {ptsEdit === f.id && ptsErr && <span className="adm-ptserr" role="alert">{ptsErr}</span>}
+    </>
+  )
+  const statusSwitch = (f: Flag) => (
+    <button type="button" role="switch" aria-checked={!f.frozen} className={`fl-switch${f.frozen ? '' : ' on'}`} onClick={() => toggleFreeze(f)} disabled={busy}
+      aria-label={`${f.title}: submissions ${f.frozen ? 'paused' : 'open'}. Toggle`} title={f.frozen ? 'Frozen: click to open submissions' : 'Live: click to freeze submissions'}>
+      <i aria-hidden="true" /><span>{f.frozen ? 'frozen' : 'live'}</span>
+    </button>
+  )
+  const answerCell = (f: Flag) => (
+    <span className="fl-answer">
+      <code>{reveal[f.id] ? f.answer || <i className="tmuted">(not set)</i> : '••••••••••'}</code>
+      <button type="button" className="adm-btn sm" onClick={() => setReveal((m) => ({ ...m, [f.id]: !m[f.id] }))} aria-pressed={!!reveal[f.id]} aria-label={`${reveal[f.id] ? 'Hide' : 'Show'} answer for ${f.title}`}>{reveal[f.id] ? 'hide' : 'show'}</button>
+      <button type="button" className="adm-btn sm" onClick={() => copyAnswer(f)} disabled={!f.answer} aria-label={`Copy answer for ${f.title}`}>{copied === f.id ? 'copied' : 'copy'}</button>
+    </span>
+  )
+  const solvedCell = (f: Flag) => {
+    const pct = view.rate(f)
+    return (
+      <span className="st-prog" title={`${f.captures} of ${view.n} students solved it · ${f.attempts} attempts`}>
+        <span className="st-prog-n"><b>{f.captures}</b> / {view.n} solved</span>
+        <span className="st-bar" role="presentation"><i style={{ width: `${Math.max(f.captures > 0 ? 2 : 0, pct)}%` }} /></span>
+        <small className="tmuted">{f.attempts} tries · {f.attempts ? Math.round((f.captures / f.attempts) * 100) : 0}% hit</small>
+      </span>
+    )
+  }
+  const questionLink = (f: Flag) => (f.questionUrl
+    ? <a className="fl-link" href={f.questionUrl} target="_blank" rel="noopener noreferrer" title={f.questionUrl}>{f.questionUrl.replace(/^https?:\/\//, '')}<span aria-hidden="true"> ↗</span></a>
+    : <span className="tmuted">—</span>)
+  const rowActions = (f: Flag) => (
+    <>
+      <button type="button" className="adm-btn sm" onClick={() => { setErrors({}); setEdit(f) }} aria-label={`Edit ${f.title}`}>edit</button>
+      <button type="button" className="adm-btn sm danger" onClick={() => setDel(f)} aria-label={`Delete ${f.title}`}>delete</button>
+    </>
+  )
 
   const cur = edit && edit !== 'new' ? edit : { ...EMPTY_FLAG, sortOrder: rows?.length ?? 0 }
   return (
-    <section className="dcard dcard-wide" aria-labelledby="a-fl">
+    <section className="dcard dcard-wide st fl" aria-labelledby="a-fl">
       <div className="dcard-head">
-        <h2 id="a-fl" className="dcard-h"><span className="tp-dollar">$</span> ./flags --manage {rows && <span className="tmuted">({rows.length})</span>}</h2>
+        <h2 id="a-fl" className="dcard-h"><span className="tp-dollar">$</span> ./flags --manage {rows && <span className="tmuted">({view.shown.length}{view.shown.length !== rows.length ? ` of ${rows.length}` : ''})</span>}</h2>
         <div className="adm-tools">
-          <span className="tmuted adm-small">frozen flags stay visible but accept no submissions</span>
           <button type="button" className="adm-btn primary" onClick={() => { setErrors({}); setEdit('new') }}><PlusIcon /> new flag</button>
         </div>
       </div>
 
-      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
-      {rows && rows.length === 0 && <p className="tmuted">No flags yet. Create the first one.</p>}
       {rows && rows.length > 0 && (
-        <div className="adm-tablewrap">
-          <table className="lb-table adm-table">
-            <thead><tr><th>order</th><th>flag</th><th>level</th><th>state</th><th>answer</th><th>question</th><th>solved</th><th className="sr-only">actions</th></tr></thead>
-            <tbody>
-              {rows.map((f) => (
-                <tr key={f.id}>
-                  <td>{f.sortOrder}</td>
-                  <td>
-                    <b>{f.title}</b><br />
-                    {ptsEdit === f.id ? (
-                      <form className="adm-ptsform" onSubmit={(e) => { e.preventDefault(); savePoints(f) }} noValidate>
-                        <label className="sr-only" htmlFor={`pts-${f.id}`}>Points for {f.title}</label>
-                        <input id={`pts-${f.id}`} type="number" min={1} max={100000} step={1} value={ptsDraft} onChange={(e) => { setPtsDraft(e.target.value); setPtsErr('') }}
-                          onKeyDown={(e) => { if (e.key === 'Escape') setPtsEdit(null) }} aria-invalid={!!ptsErr} autoFocus />
-                        <button type="submit" className="adm-btn sm primary" disabled={busy} aria-busy={busy}>{busy ? '…' : 'save'}</button>
-                        <button type="button" className="adm-btn sm" onClick={() => setPtsEdit(null)} disabled={busy}>cancel</button>
-                      </form>
-                    ) : (
-                      <button type="button" className="adm-pts" onClick={() => { setPtsDraft(String(f.points)); setPtsErr(''); setPtsEdit(f.id) }} aria-label={`Edit points for ${f.title}, currently ${f.points}`} title="Edit points">
-                        {f.points} pts <span aria-hidden="true">✎</span>
-                      </button>
-                    )}
-                    {ptsEdit === f.id && ptsErr && <span className="adm-ptserr" role="alert">{ptsErr}</span>}
-                  </td>
-                  <td><span className={`adm-lvl t-${f.level}`}>{f.level}</span></td>
-                  <td>{f.frozen ? <span className="adm-state frozen">[❄] frozen</span> : <span className="adm-state live">[●] live</span>}</td>
-                  <td>
-                    <span className="adm-answer">
-                      <code>{reveal[f.id] ? f.answer || <i className="tmuted">(not set)</i> : '••••••••••'}</code>
-                      <button type="button" className="adm-btn sm" onClick={() => setReveal((m) => ({ ...m, [f.id]: !m[f.id] }))} aria-pressed={!!reveal[f.id]}>{reveal[f.id] ? 'hide' : 'show'}</button>
-                    </span>
-                  </td>
-                  <td>{f.questionUrl ? <a className="adm-link" href={f.questionUrl} target="_blank" rel="noopener noreferrer">{f.questionUrl.replace(/^https?:\/\//, '').slice(0, 36)}{f.questionUrl.length > 44 ? '…' : ''}</a> : <span className="tmuted">—</span>}</td>
-                  <td>{f.captures} <span className="tmuted adm-small">/ {f.attempts} tries</span></td>
-                  <td className="adm-rowactions">
-                    <button type="button" className={`adm-btn sm${f.frozen ? ' warm' : ' cold'}`} onClick={() => toggleFreeze(f)} disabled={busy} aria-pressed={f.frozen}>{f.frozen ? 'unfreeze' : 'freeze'}</button>
-                    <button type="button" className="adm-btn sm" onClick={() => { setErrors({}); setEdit(f) }}>edit</button>
-                    <button type="button" className="adm-btn sm danger" onClick={() => setDel(f)}>delete</button>
-                  </td>
-                </tr>
+        <>
+          <ul className="st-stats" aria-label="Summary">
+            <li><small>flags</small><b>{rows.length}</b><span className={view.counts.frozen ? 'fl-warn' : undefined}>{rows.length - view.counts.frozen} live{view.counts.frozen ? ` · ${view.counts.frozen} frozen` : ''}</span></li>
+            <li><small>points available</small><b>{view.points.toLocaleString('en-IN')}</b></li>
+            <li><small>avg solve rate</small><b>{view.avgRate}%</b><span>of {view.n} students</span></li>
+            <li><small>attempts</small><b>{view.attempts}</b><span>{view.captures} captures · {view.hit}% hit</span></li>
+          </ul>
+          <div className="st-filters">
+            <div className="st-chips" role="group" aria-label="Filter flags">
+              {(['all', 'easy', 'medium', 'hard', 'frozen'] as const).map((k) => (
+                <button key={k} type="button" data-lvl={k} aria-pressed={lvl === k} onClick={() => setLvl(k)}>{k} <i>{view.counts[k]}</i></button>
               ))}
-            </tbody>
-          </table>
+            </div>
+            <label className="adm-select st-sort"><span className="sr-only">Sort by</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+                <option value="order">sort: order</option>
+                <option value="points">sort: points</option>
+                <option value="solved">sort: most solved</option>
+                <option value="tries">sort: most attempts</option>
+              </select>
+            </label>
+          </div>
+        </>
+      )}
+
+      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
+      {rows && rows.length === 0 && (
+        <div className="st-empty">
+          <p><b>No flags yet.</b></p>
+          <p className="tmuted">Create the first challenge. Students see it on their board straight away.</p>
+          <button type="button" className="adm-btn primary sm" onClick={() => { setErrors({}); setEdit('new') }}><PlusIcon /> new flag</button>
         </div>
+      )}
+      {rows && rows.length > 0 && view.shown.length === 0 && <p className="tmuted">No flags match this filter.</p>}
+
+      {view.shown.length > 0 && (
+        <>
+          <div className="adm-tablewrap st-table fl-table">
+            <table className="lb-table adm-table">
+              <colgroup><col className="c-fl-order" /><col /><col className="c-fl-state" /><col className="c-fl-answer" /><col className="c-fl-q" /><col className="c-fl-solved" /><col className="c-fl-actions" /></colgroup>
+              <thead><tr>{flTh('order', 'order')}<th>flag</th><th>state</th><th>answer</th><th>question</th>{flTh('solved', 'solved')}<th className="sr-only">actions</th></tr></thead>
+              <tbody>
+                {view.shown.map((f) => (
+                  <tr key={f.id} className={`fl-row t-${f.level}${f.frozen ? ' frozen' : ''}`}>
+                    <td><span className="st-rank rn">{f.sortOrder}</span></td>
+                    <td>
+                      <span className="fl-name"><b>{f.title}</b><span className={`adm-lvl t-${f.level}`}>{f.level}</span></span>
+                      <span className="fl-pts">{pointsEditor(f)}</span>
+                    </td>
+                    <td>{statusSwitch(f)}</td>
+                    <td>{answerCell(f)}</td>
+                    <td className="fl-q">{questionLink(f)}</td>
+                    <td>{solvedCell(f)}</td>
+                    <td className="adm-rowactions">{rowActions(f)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="st-cards fl-cards" aria-label="Flags">
+            {view.shown.map((f) => (
+              <li key={f.id} className={`st-card fl-card t-${f.level}${f.frozen ? ' frozen' : ''}`}>
+                <div className="st-card-top">
+                  <span className="st-rank rn">{f.sortOrder}</span>
+                  <span className="st-id"><span className="fl-name"><b>{f.title}</b><span className={`adm-lvl t-${f.level}`}>{f.level}</span></span><span className="fl-pts">{pointsEditor(f)}</span></span>
+                  {statusSwitch(f)}
+                </div>
+                {solvedCell(f)}
+                <div className="fl-card-row">{answerCell(f)}</div>
+                <div className="fl-card-row">{questionLink(f)}</div>
+                <div className="st-card-actions">{rowActions(f)}</div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {edit && (
