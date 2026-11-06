@@ -10,6 +10,9 @@ export const MAX_ATTEMPTS = 3
 
 /** Flags are compared case-insensitively with surrounding whitespace removed, then hashed. */
 export const normalize = (v) => String(v ?? '').trim().toLowerCase()
+/** Question links must be http(s) or a same-site path ("/#ctf"); this keeps javascript: / data: URLs out of <a href>. */
+export const SAFE_URL = /^(https?:\/\/\S+|\/(?!\/)\S*)$/i
+
 /** A positive whole-number id from a URL/query value, or null (so 'abc' or '1; DROP' never reaches SQL as NaN). */
 export const intId = (v) => (/^[0-9]{1,10}$/.test(String(v)) && Number(v) > 0 ? Number(v) : null)
 export const hashAnswer = (v) => createHash('sha256').update(normalize(v)).digest('hex')
@@ -27,7 +30,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       maxAttempts: MAX_ATTEMPTS,
       flags: flags.map((f) => {
         const s = byFlag.get(f.id)
-        return { ...f, frozen: !!Number(f.frozen), attempts: Number(s?.attempts ?? 0), solved: !!Number(s?.solved ?? 0), lastAt: s?.last ?? null }
+        return { ...f, question_url: SAFE_URL.test(f.question_url) ? f.question_url : '', frozen: !!Number(f.frozen), attempts: Number(s?.attempts ?? 0), solved: !!Number(s?.solved ?? 0), lastAt: s?.last ?? null }
       }),
     })
   } catch (err) {

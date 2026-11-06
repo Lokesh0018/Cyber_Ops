@@ -4,7 +4,7 @@ import { pool } from '../config/db.js'
 import { invalidateBoard } from '../lib/boardCache.js'
 import { rateLimit } from '../lib/rateLimit.js'
 import { issueToken, requireAdmin } from '../lib/token.js'
-import { MAX_ATTEMPTS, hashAnswer, intId } from './flags.js'
+import { MAX_ATTEMPTS, SAFE_URL, hashAnswer, intId } from './flags.js'
 
 const router = Router()
 
@@ -19,6 +19,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^[0-9]{10}$/
 const ROLL_RE = /^[A-Za-z0-9\-\/]{3,30}$/
 const normRoll = (v) => String(v ?? '').trim().toUpperCase()
+/** Escapes LIKE wildcards so a search for "50%" or "a_b" matches those characters literally (MySQL's default escape character is backslash). */
+const likeEsc = (s) => s.replace(/[\\%_]/g, '\\$&')
 
 const publicStudent = (r) => ({
   id: r.email, fullName: r.full_name, email: r.email, phone: r.phone, institution: r.institution,
@@ -129,7 +131,7 @@ function validateStudent(b, partial = false) {
 // GET /api/admin/students?q=
 router.get('/students', async (req, res, next) => {
   try {
-    const q = `%${String(req.query.q ?? '').trim()}%`
+    const q = `%${likeEsc(String(req.query.q ?? '').trim())}%`
     const [rows] = await pool.query(
       `${STUDENT_SQL} WHERE st.full_name LIKE ? OR st.email LIKE ? OR st.institution LIKE ? OR st.roll_number LIKE ?
        GROUP BY st.email ORDER BY st.score DESC, st.full_name ASC`,
@@ -247,8 +249,11 @@ router.post('/students/:id/score', async (req, res, next) => {
     const note = String(req.body?.note ?? 'manual adjustment').trim().slice(0, 120) || 'manual adjustment'
     if (!Number.isFinite(points) || points === 0 || Math.abs(points) > 100000) return res.status(422).json({ message: 'Points must be a non-zero whole number.' })
     await conn.beginTransaction()
-    const [r] = await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [points, id])
-    if (!r.affectedRows) { await conn.rollback(); return res.status(404).json({ message: 'Student not found.' }) }
+    const [[cur]] = await conn.query('SELECT score FROM students WHERE email = ? FOR UPDATE', [id])
+    if (!cur) { await conn.rollback(); return res.status(404).json({ message: 'Student not found.' }) }
+    // The leaderboard and charts assume scores are never negative, so a deduction can take a score to 0 but not below it.
+    if (cur.score + points < 0) { await conn.rollback(); return res.status(422).json({ message: `Can't deduct ${-points}: ${cur.score === 0 ? 'the student has no points' : `the student only has ${cur.score} points`}.` }) }
+    await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [points, id])
     await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [id, points, note])
     await conn.commit()
     const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.email = ? GROUP BY st.email`, [id])
@@ -284,7 +289,10 @@ function validateFlag(b) {
   if (!LEVELS.includes(b.level)) e.level = 'Pick easy, medium or hard.'
   if (!b.answer || !String(b.answer).trim()) e.answer = 'Answer is required.'
   else if (String(b.answer).trim().length > 200) e.answer = 'Answer: max 200 characters.'
-  if (b.questionUrl && String(b.questionUrl).length > 300) e.questionUrl = 'URL: max 300 characters.'
+  const url = String(b.questionUrl ?? '').trim()
+  if (url.length > 300) e.questionUrl = 'URL: max 300 characters.'
+  else if (url && !SAFE_URL.test(url)) e.questionUrl = 'URL must start with http://, https:// or / (no javascript: links).'
+  if (b.sortOrder != null && b.sortOrder !== '' && !Number.isInteger(Number(b.sortOrder))) e.sortOrder = 'Order must be a whole number.'
   return e
 }
 
@@ -310,7 +318,7 @@ router.post('/flags', async (req, res, next) => {
     const answer = String(b.answer).trim()
     const [r] = await pool.query(
       'INSERT INTO flags (title, points, level, frozen, answer, answer_hash, question_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, Number(b.points), b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), b.sortOrder != null ? Number(b.sortOrder) : order],
+      [title, Number(b.points), b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), b.sortOrder != null && b.sortOrder !== '' ? Number(b.sortOrder) : order],
     )
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [r.insertId])
     res.status(201).json({ flag: publicFlag(row) })
@@ -353,14 +361,14 @@ router.put('/flags/:id', async (req, res, next) => {
     const title = String(b.title).trim()
     const newPts = Number(b.points)
     await conn.beginTransaction()
-    const [[old]] = await conn.query('SELECT id, title, points FROM flags WHERE id = ? FOR UPDATE', [id])
+    const [[old]] = await conn.query('SELECT id, title, points, sort_order FROM flags WHERE id = ? FOR UPDATE', [id])
     if (!old) { await conn.rollback(); return res.status(404).json({ message: 'Flag not found.' }) }
     const [dupes] = await conn.query('SELECT id FROM flags WHERE title = ? AND id <> ? LIMIT 1', [title, id])
     if (dupes.length) { await conn.rollback(); return res.status(409).json({ message: 'A flag with this title exists.', errors: { title: 'Title already used.' } }) }
     const answer = String(b.answer).trim()
     await conn.query(
       'UPDATE flags SET title = ?, points = ?, level = ?, frozen = ?, answer = ?, answer_hash = ?, question_url = ?, sort_order = ? WHERE id = ?',
-      [title, newPts, b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
+      [title, newPts, b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), b.sortOrder == null || b.sortOrder === '' ? old.sort_order : Number(b.sortOrder), id],
     )
     const { rescored, delta } = await rescoreSolvers(conn, id, title, newPts, old.points)
     await conn.commit()
@@ -390,7 +398,7 @@ router.patch('/flags/:id/points', async (req, res, next) => {
     const pts = Number(req.body?.points)
     if (!Number.isInteger(pts) || pts < 1 || pts > 100000) return res.status(422).json({ message: 'Points: whole number 1–100000.', errors: { points: 'Points: whole number 1–100000.' } })
     await conn.beginTransaction()
-    const [[old]] = await conn.query('SELECT id, title, points FROM flags WHERE id = ? FOR UPDATE', [id])
+    const [[old]] = await conn.query('SELECT id, title, points, sort_order FROM flags WHERE id = ? FOR UPDATE', [id])
     if (!old) { await conn.rollback(); return res.status(404).json({ message: 'Flag not found.' }) }
     await conn.query('UPDATE flags SET points = ? WHERE id = ?', [pts, id])
     const { rescored, delta } = await rescoreSolvers(conn, id, old.title, pts, old.points)
@@ -418,7 +426,7 @@ router.get('/submissions', async (req, res, next) => {
   try {
     const where = []
     const args = []
-    if (req.query.q) { where.push('(st.full_name LIKE ? OR st.email LIKE ?)'); args.push(`%${req.query.q}%`, `%${req.query.q}%`) }
+    if (req.query.q) { const q = `%${likeEsc(String(req.query.q))}%`; where.push('(st.full_name LIKE ? OR st.email LIKE ?)'); args.push(q, q) }
     if (req.query.flag) {
       const fid = intId(req.query.flag)
       if (fid === null) return res.status(400).json({ message: 'Invalid flag filter.' })
