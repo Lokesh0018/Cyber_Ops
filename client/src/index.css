@@ -1495,6 +1495,43 @@ html:has(.authpage){scrollbar-gutter:stable}
   .fb-submit{flex:1}
 }
 
+/* ── student flag board: calmer colours ──
+   The level colours (cyan / amber / red / green) were fully saturated and wrapped in glows. Inside the board only, the terminal colours
+   are re-pointed at softer, desaturated versions (everything above that uses var(--term-*) follows), the hard-coded rgba tints are
+   swapped to match, and the glows are dialled down. Text on the muted fills still clears 4.5:1. */
+.fb{--term-cyan:#5aa5d2;--term-green:#4fb68e;--term-amber:#cfa159;--term-red:#cb7384;
+  --fb-cyan:90,165,210;--fb-green:79,182,142;--fb-amber:207,161,89;--fb-red:203,115,132}
+.fb-level,.fb-ovi{--tier-rgb:var(--fb-cyan)}
+.fb-level.t-medium,.fb-ovi.t-medium{--tier-rgb:var(--fb-amber)}
+.fb-level.t-hard,.fb-ovi.t-hard{--tier-rgb:var(--fb-red)}
+.fb-level.clear,.fb-ovi.clear{--tier-rgb:var(--fb-green)}
+.fb-q.solved{--tier-rgb:var(--fb-green);background:linear-gradient(135deg,rgba(var(--fb-green),.07),rgba(var(--fb-green),.015) 60%),rgba(7,13,24,.75);border-color:rgba(var(--fb-green),.28)}
+.fb-q.out{--tier-rgb:var(--fb-red)}
+.fb-q.out .fb-qname{text-decoration-color:rgba(var(--fb-red),.5)}
+.fb-total{border-color:rgba(var(--fb-cyan),.16)}
+.fb-totalbar i{box-shadow:0 0 6px rgba(var(--fb-green),.25)}
+.fb-level::after{opacity:.5}
+.fb-lvtag{box-shadow:none}
+.fb-lvbar i{box-shadow:0 0 5px rgba(var(--tier-rgb),.25)}
+.fb-lvbar i::after{background:repeating-linear-gradient(-45deg,rgba(255,255,255,.1) 0 6px,transparent 6px 12px);background-size:17px 100%}
+.fb-lvclear{background:rgba(var(--fb-green),.1);border-color:rgba(var(--fb-green),.32)}
+.fb-ring{box-shadow:0 0 8px rgba(var(--tier-rgb),.14)}
+.fb-q::before{box-shadow:0 0 4px rgba(var(--tier-rgb),.25)}
+.fb-qnum b,.fb-qpts b{text-shadow:none}
+.fb-qstatus i{box-shadow:none}
+.fb-qstatus.s-in-progress{border-color:rgba(var(--fb-amber),.35);background:rgba(var(--fb-amber),.07)}
+.fb-qstatus.s-captured{border-color:rgba(var(--fb-green),.38);background:rgba(var(--fb-green),.08)}
+.fb-qstatus.s-locked{border-color:rgba(var(--fb-red),.38);background:rgba(var(--fb-red),.07)}
+.fb-tries i.used{box-shadow:0 0 4px rgba(var(--fb-amber),.3)}
+.fb-tries b.ok{text-shadow:none}
+.fb-q .fb-submit{background:linear-gradient(135deg,color-mix(in srgb,var(--tier) 96%,#000),color-mix(in srgb,var(--tier) 88%,#000));box-shadow:0 4px 12px rgba(var(--tier-rgb),.14),inset 0 1px 0 rgba(255,255,255,.12)}
+.fb-q .fb-submit:hover{filter:none;box-shadow:0 6px 16px rgba(var(--tier-rgb),.24),inset 0 1px 0 rgba(255,255,255,.16)}
+.fb-q.last .fb-prompt{border-color:rgba(var(--fb-red),.4)}
+.fb-q.last .fb-prompt:focus-within{box-shadow:0 0 0 3px rgba(var(--fb-red),.14)}
+.fb-q.last .fb-submit{background:linear-gradient(135deg,var(--term-red),color-mix(in srgb,var(--term-red) 88%,#000));box-shadow:0 4px 12px rgba(var(--fb-red),.16),inset 0 1px 0 rgba(255,255,255,.12)}
+.fb-prompt:focus-within{box-shadow:0 0 0 3px rgba(var(--fb-cyan),.12)}
+.fb-view:hover{box-shadow:none}
+
 /* shown for a moment while a lazily loaded route (admin, dashboard, login) downloads */
 .route-wait{min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#080f1f;color:#91a6c7;font-family:var(--m,ui-monospace,monospace);font-size:.85rem;letter-spacing:.08em}
 /* ══════════ admin console ══════════ */
