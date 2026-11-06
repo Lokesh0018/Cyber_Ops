@@ -39,7 +39,10 @@ function validateRegistration(b) {
 }
 
 // POST /api/auth/register
-router.post('/register', async (req, res, next) => {
+// Open sign-up, so cap it per IP to stop a script flooding the roster/leaderboard with fake students. Sized for a class registering
+// together from one college network (20 sign-ups or typo retries per 10 minutes); raise it with REGISTER_LIMIT if you need more.
+const registerByIp = rateLimit({ windowMs: 10 * 60_000, max: Number(process.env.REGISTER_LIMIT) || 20, key: (req) => `reg:${req.ip}`, message: 'Too many sign-ups from this network. Please wait a few minutes and try again.' })
+router.post('/register', registerByIp, async (req, res, next) => {
   try {
     const b = req.body ?? {}
     const errors = validateRegistration(b)
