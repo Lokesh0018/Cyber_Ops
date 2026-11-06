@@ -62,7 +62,7 @@ function useCountUp(target: number, ms = 600) {
 }
 
 /** Width of an element in real pixels, so SVG text stays a constant size. */
-function useWidth<T extends HTMLElement>() {
+export function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null)
   const [w, setW] = useState(0)
   useLayoutEffect(() => {
@@ -77,7 +77,7 @@ function useWidth<T extends HTMLElement>() {
 }
 
 /** Round a max up to a tidy axis with 4 equal steps (1/2/5 x 10^k). */
-function niceAxis(max: number) {
+export function niceAxis(max: number) {
   const raw = Math.max(1, max) / 4
   const mag = Math.pow(10, Math.floor(Math.log10(raw)))
   const step = ([1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag)

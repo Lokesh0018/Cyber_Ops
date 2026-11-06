@@ -114,7 +114,63 @@ router.get('/students', async (req, res, next) => {
        GROUP BY st.email ORDER BY st.score DESC, st.full_name ASC`,
       [q, q, q, q],
     )
-    res.json({ students: rows.map(publicStudent) })
+    const [[{ n: totalFlags }]] = await pool.query('SELECT COUNT(*) AS n FROM flags')
+    res.json({ students: rows.map(publicStudent), totalFlags: Number(totalFlags) })
+  } catch (err) { next(err) }
+})
+
+// GET /api/admin/students/series?top=6 — score-over-time for the top N students (from score_events), for the students-tab "race" chart
+router.get('/students/series', async (req, res, next) => {
+  try {
+    const top = Math.min(10, Math.max(1, Math.trunc(Number(req.query.top)) || 6))
+    const [leaders] = await pool.query('SELECT email, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC LIMIT ?', [top])
+    let series = []
+    if (leaders.length) {
+      const [events] = await pool.query(
+        'SELECT student_email, points, created_at FROM score_events WHERE student_email IN (?) ORDER BY created_at ASC, id ASC',
+        [leaders.map((r) => r.email)],
+      )
+      series = leaders.map((r) => {
+        let running = 0
+        const points = events.filter((e) => e.student_email === r.email).map((e) => ({ t: e.created_at, score: (running += e.points) }))
+        return { id: r.email, name: r.name, institution: r.institution, score: r.score, points }
+      })
+    }
+    res.json({ series })
+  } catch (err) { next(err) }
+})
+
+// GET /api/admin/students/:id/detail — one student's profile, per-flag progress, every submission and every score event
+router.get('/students/:id/detail', async (req, res, next) => {
+  try {
+    const id = emailParam(req)
+    const [[row]] = await pool.query(`${STUDENT_SQL} WHERE st.email = ? GROUP BY st.email`, [id])
+    if (!row) return res.status(404).json({ message: 'Student not found.' })
+    const [[{ ahead }]] = await pool.query('SELECT COUNT(*) AS ahead FROM students WHERE score > ?', [row.score])
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM students')
+    const [flags] = await pool.query('SELECT id, title, points, level, frozen FROM flags ORDER BY sort_order ASC, id ASC')
+    const [submissions] = await pool.query(
+      `SELECT s.id, s.answer, s.correct, s.created_at, f.id AS flag_id, f.title AS flag, f.points
+         FROM submissions s JOIN flags f ON f.id = s.flag_id
+        WHERE s.student_email = ? ORDER BY s.id DESC`,
+      [id],
+    )
+    const [events] = await pool.query('SELECT id, points, note, created_at FROM score_events WHERE student_email = ? ORDER BY created_at DESC, id DESC', [id])
+    const byFlag = new Map()
+    for (const s of [...submissions].reverse()) { // oldest first, so solvedAt/firstAt are right
+      const f = byFlag.get(s.flag_id) ?? { attempts: 0, solved: false, solvedAt: null, firstAt: s.created_at, lastAt: null }
+      f.attempts++
+      f.lastAt = s.created_at
+      if (Number(s.correct)) { f.solved = true; f.solvedAt = s.created_at }
+      byFlag.set(s.flag_id, f)
+    }
+    res.json({
+      student: publicStudent(row),
+      rank: Number(ahead) + 1, total: Number(total), maxAttempts: MAX_ATTEMPTS,
+      flags: flags.map((f) => ({ ...f, frozen: !!Number(f.frozen), ...(byFlag.get(f.id) ?? { attempts: 0, solved: false, solvedAt: null, firstAt: null, lastAt: null }) })),
+      submissions: submissions.map((s) => ({ ...s, correct: Number(s.correct) })),
+      events,
+    })
   } catch (err) { next(err) }
 })
 
@@ -313,13 +369,36 @@ router.get('/submissions', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// DELETE /api/admin/submissions/:id — e.g. to give a student an attempt back (does not touch score)
+// DELETE /api/admin/submissions/:id[?refund=1] — e.g. to give a student an attempt back.
+// By default the score is not touched. With ?refund=1, removing a CORRECT submission also takes back the points that capture awarded
+// (a negative score event, so the history stays auditable and students.score keeps equalling the sum of score_events), all in one transaction.
 router.delete('/submissions/:id', async (req, res, next) => {
+  const conn = await pool.getConnection()
   try {
-    const [r] = await pool.query('DELETE FROM submissions WHERE id = ?', [Number(req.params.id)])
-    if (!r.affectedRows) return res.status(404).json({ message: 'Submission not found.' })
-    res.json({ ok: true })
-  } catch (err) { next(err) }
+    const id = Number(req.params.id)
+    const refund = req.query.refund === '1'
+    await conn.beginTransaction()
+    const [[sub]] = await conn.query(
+      `SELECT s.id, s.student_email, s.correct, f.title, f.points
+         FROM submissions s JOIN flags f ON f.id = s.flag_id WHERE s.id = ? FOR UPDATE`,
+      [id],
+    )
+    if (!sub) { await conn.rollback(); return res.status(404).json({ message: 'Submission not found.' }) }
+    await conn.query('DELETE FROM submissions WHERE id = ?', [id])
+    let refunded = 0
+    if (refund && Number(sub.correct)) {
+      // refund what was actually awarded for this capture (the flag's points may have been edited since); fall back to the flag's current value
+      const [[ev]] = await conn.query(
+        'SELECT points FROM score_events WHERE student_email = ? AND note = ? AND points > 0 ORDER BY id DESC LIMIT 1',
+        [sub.student_email, sub.title],
+      )
+      refunded = Number(ev?.points ?? sub.points)
+      await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [sub.student_email, -refunded, `Removed capture: ${sub.title}`.slice(0, 120)])
+      await conn.query('UPDATE students SET score = score - ? WHERE email = ?', [refunded, sub.student_email])
+    }
+    await conn.commit()
+    res.json({ ok: true, refunded })
+  } catch (err) { await conn.rollback().catch(() => {}); next(err) } finally { conn.release() }
 })
 
 export default router

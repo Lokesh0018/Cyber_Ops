@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError, useAdmin } from '../../hooks/useAdmin'
 import { CloseIcon, KeyIcon, ListIcon, PlusIcon, RadarIcon, SearchIcon, UserIcon } from '../Icons'
 import { Overview } from './AdminOverview'
+import { ScoreHistogram, ScoreRace, type RaceSeries } from './AdminStudentCharts'
+import { Overlay, StudentDetail } from './AdminStudentDetail'
 
 /* ───────────────────────── types ───────────────────────── */
 interface Student { id: string; fullName: string; email: string; phone: string; institution: string; branch: string; rollNumber: string; score: number; createdAt: string; solved: number; attempts: number }
@@ -79,15 +81,17 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
   }, [onClose])
   return (
-    <div className="adm-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="adm-modal" role="dialog" aria-modal="true" aria-labelledby="adm-modal-h">
-        <div className="adm-modal-head">
-          <h2 id="adm-modal-h" className="dcard-h"><span className="tp-dollar">$</span> {title}</h2>
-          <button type="button" className="adm-icon" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+    <Overlay>
+      <div className="adm-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+        <div className="adm-modal" role="dialog" aria-modal="true" aria-labelledby="adm-modal-h">
+          <div className="adm-modal-head">
+            <h2 id="adm-modal-h" className="dcard-h"><span className="tp-dollar">$</span> {title}</h2>
+            <button type="button" className="adm-icon" onClick={onClose} aria-label="Close"><CloseIcon /></button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </Overlay>
   )
 }
 
@@ -117,9 +121,44 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const [totalFlags, setTotalFlags] = useState(0)
+  const [race, setRace] = useState<RaceSeries[] | null>(null)
+  const [open, setOpen] = useState<string | null>(null) // id (email) of the student whose detail drawer is open
+  const [ver, setVer] = useState(0) // bumps on every reload so the drawer refetches
+  const [college, setCollege] = useState('all')
+  const [sort, setSort] = useState<'score' | 'name' | 'solved' | 'new'>('score')
+
   const load = useCallback(() => {
-    api<{ students: Student[] }>(`/students?q=${encodeURIComponent(q)}`).then((d) => setRows(d.students)).catch((e: Error) => notify({ kind: 'error', text: e.message }))
+    api<{ students: Student[]; totalFlags?: number }>(`/students?q=${encodeURIComponent(q)}`)
+      .then((d) => { setRows(d.students); setTotalFlags(d.totalFlags ?? 0); setVer((v) => v + 1) })
+      .catch((e: Error) => notify({ kind: 'error', text: e.message }))
+    // the race chart is independent of the search box; a missing endpoint (server not restarted yet) just hides it
+    api<{ series: RaceSeries[] }>('/students/series?top=6').then((d) => setRace(d.series)).catch(() => setRace([]))
   }, [api, q, notify])
+
+  // Derived view: server returns score order; rank is that order, and the filter/sort only change what is shown.
+  const view = useMemo(() => {
+    const all = rows ?? []
+    const colleges = Array.from(new Set(all.map((s) => s.institution))).sort((a, b) => a.localeCompare(b))
+    const activeCollege = colleges.includes(college) ? college : 'all'
+    const rank = new Map(all.map((s, i) => [s.id, i + 1]))
+    const shown = all.filter((s) => activeCollege === 'all' || s.institution === activeCollege)
+    const cmp: Record<typeof sort, (a: Student, b: Student) => number> = {
+      score: (a, b) => b.score - a.score || a.fullName.localeCompare(b.fullName),
+      name: (a, b) => a.fullName.localeCompare(b.fullName),
+      solved: (a, b) => b.solved - a.solved || b.score - a.score,
+      new: (a, b) => b.createdAt.localeCompare(a.createdAt),
+    }
+    shown.sort(cmp[sort])
+    const maxScore = Math.max(1, ...all.map((s) => s.score))
+    const flagsTotal = totalFlags || Math.max(1, ...all.map((s) => s.solved))
+    return {
+      colleges, activeCollege, shown, rank, maxScore, flagsTotal,
+      avg: all.length ? Math.round(all.reduce((a, s) => a + s.score, 0) / all.length) : 0,
+      captures: all.reduce((a, s) => a + s.solved, 0),
+      attempts: all.reduce((a, s) => a + s.attempts, 0),
+    }
+  }, [rows, college, sort, totalFlags])
   useEffect(() => { const t = window.setTimeout(load, q ? 250 : 0); return () => window.clearTimeout(t) }, [load, q])
 
   const save = async (e: FormEvent<HTMLFormElement>) => {
@@ -129,7 +168,10 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
     setBusy(true); setErrors({})
     try {
       if (edit === 'new') { await api('/students', { method: 'POST', body }); notify({ kind: 'ok', text: `${body.fullName} added.` }) }
-      else { await api(`/students/${encodeURIComponent(edit.id)}`, { method: 'PUT', body }); notify({ kind: 'ok', text: `${body.fullName} updated.` }) }
+      else {
+        await api(`/students/${encodeURIComponent(edit.id)}`, { method: 'PUT', body }); notify({ kind: 'ok', text: `${body.fullName} updated.` })
+        if (open === edit.id) setOpen(String(body.email).trim().toLowerCase()) // the id is the email; keep the drawer on the same student
+      }
       setEdit(null); load()
     } catch (err) {
       setErrors((err as ApiError).errors ?? {})
@@ -149,48 +191,161 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
   const doDelete = async () => {
     if (busy || !del) return
     setBusy(true)
-    try { await api(`/students/${encodeURIComponent(del.id)}`, { method: 'DELETE' }); notify({ kind: 'ok', text: `${del.fullName} removed.` }); setDel(null); load() }
+    try { await api(`/students/${encodeURIComponent(del.id)}`, { method: 'DELETE' }); notify({ kind: 'ok', text: `${del.fullName} removed.` }); if (open === del.id) setOpen(null); setDel(null); load() }
     catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
 
   const cur = edit && edit !== 'new' ? edit : EMPTY_STUDENT
+  // clickable column header that drives the same sort as the dropdown (name A-Z; score and flags high-to-low)
+  const sortTh = (key: typeof sort, label: string, cls = '') => (
+    <th className={cls} aria-sort={sort === key ? (key === 'name' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`st-th${sort === key ? ' on' : ''}`} onClick={() => setSort(key)} title={`Sort by ${label}`}>
+        {label}<i aria-hidden="true" />
+      </button>
+    </th>
+  )
   return (
-    <section className="dcard dcard-wide" aria-labelledby="a-st">
+    <section className="dcard dcard-wide st" aria-labelledby="a-st">
       <div className="dcard-head">
-        <h2 id="a-st" className="dcard-h"><span className="tp-dollar">$</span> ./students --list {rows && <span className="tmuted">({rows.length})</span>}</h2>
+        <h2 id="a-st" className="dcard-h"><span className="tp-dollar">$</span> ./students --list {rows && <span className="tmuted">({view.shown.length}{view.shown.length !== rows.length ? ` of ${rows.length}` : ''})</span>}</h2>
         <div className="adm-tools">
-          <label className="adm-search"><SearchIcon /><span className="sr-only">Search students</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name, email, college, roll" /></label>
+          <label className="adm-search">
+            <SearchIcon /><span className="sr-only">Search students</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name, email, college, roll" />
+            {q && <button type="button" className="st-clear" onClick={() => setQ('')} aria-label="Clear search"><CloseIcon /></button>}
+          </label>
           <button type="button" className="adm-btn primary" onClick={() => { setErrors({}); setEdit('new') }}><PlusIcon /> add student</button>
         </div>
       </div>
 
-      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
-      {rows && rows.length === 0 && <p className="tmuted">No students match.</p>}
       {rows && rows.length > 0 && (
-        <div className="adm-tablewrap">
-          <table className="lb-table adm-table">
-            <thead><tr><th>#</th><th>student</th><th>college</th><th>roll</th><th>flags</th><th>score</th><th className="sr-only">actions</th></tr></thead>
-            <tbody>
-              {rows.map((s, i) => (
-                <tr key={s.id}>
-                  <td>{i + 1}</td>
-                  <td><b>{s.fullName}</b><br /><span className="tmuted adm-small">{s.email} · {s.phone}</span></td>
-                  <td>{s.institution}<br /><span className="tmuted adm-small">{s.branch}</span></td>
-                  <td><code>{s.rollNumber}</code></td>
-                  <td>{s.solved} <span className="tmuted adm-small">/ {s.attempts} tries</span></td>
-                  <td className="adm-num"><b>{s.score}</b></td>
-                  <td className="adm-rowactions">
+        <>
+          <ul className="st-stats" aria-label="Summary">
+            <li><small>students</small><b>{rows.length}</b></li>
+            <li><small>colleges</small><b>{view.colleges.length}</b></li>
+            <li><small>avg score</small><b>{view.avg.toLocaleString('en-IN')}</b></li>
+            <li><small>captures</small><b>{view.captures}</b><span>{view.attempts ? Math.round((view.captures / view.attempts) * 100) : 0}% hit rate</span></li>
+          </ul>
+          <div className="st-viz">
+            <section className="st-viz-card st-viz-wide" aria-labelledby="st-race-h">
+              <h3 id="st-race-h" className="st-viz-h">Score race <span className="tmuted">· top 6 over time</span></h3>
+              {race === null ? <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p> : <ScoreRace series={race} />}
+            </section>
+            <section className="st-viz-card" aria-labelledby="st-dist-h">
+              <h3 id="st-dist-h" className="st-viz-h">Score distribution <span className="tmuted">· students per band</span></h3>
+              <ScoreHistogram scores={rows.map((s) => s.score)} />
+            </section>
+          </div>
+          <div className="st-filters">
+            <div className="st-chips" role="group" aria-label="Filter by college">
+              <button type="button" aria-pressed={view.activeCollege === 'all'} onClick={() => setCollege('all')}>all <i>{rows.length}</i></button>
+              {view.colleges.map((c) => (
+                <button key={c} type="button" aria-pressed={view.activeCollege === c} onClick={() => setCollege(c)}>{c} <i>{rows.filter((s) => s.institution === c).length}</i></button>
+              ))}
+            </div>
+            <label className="adm-select st-sort"><span className="sr-only">Sort by</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+                <option value="score">sort: score</option>
+                <option value="solved">sort: flags solved</option>
+                <option value="name">sort: name</option>
+                <option value="new">sort: newest</option>
+              </select>
+            </label>
+          </div>
+        </>
+      )}
+
+      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
+      {rows && rows.length === 0 && (
+        <div className="st-empty">
+          <p><b>{q ? 'No students match your search.' : 'No students yet.'}</b></p>
+          <p className="tmuted">{q ? 'Try a name, email, college or roll number.' : 'Students appear here when they register, or add one yourself.'}</p>
+          {q ? <button type="button" className="adm-btn sm" onClick={() => setQ('')}>clear search</button> : <button type="button" className="adm-btn primary sm" onClick={() => { setErrors({}); setEdit('new') }}><PlusIcon /> add student</button>}
+        </div>
+      )}
+      {rows && rows.length > 0 && view.shown.length === 0 && <p className="tmuted">No students in this college.</p>}
+
+      {view.shown.length > 0 && (
+        <>
+          <div className="adm-tablewrap st-table">
+            <table className="lb-table adm-table">
+              <colgroup><col className="c-rank" /><col className="c-student" /><col className="c-college" /><col className="c-roll" /><col className="c-flags" /><col className="c-score" /><col className="c-actions" /></colgroup>
+              <thead><tr><th>rank</th>{sortTh('name', 'student')}<th>college</th><th>roll</th>{sortTh('solved', 'flags solved')}{sortTh('score', 'score', 'th-num')}<th className="sr-only">actions</th></tr></thead>
+              <tbody>
+                {view.shown.map((s) => {
+                  const rank = view.rank.get(s.id) ?? 0
+                  return (
+                    <tr key={s.id} className={`st-row${open === s.id ? ' on' : ''}`} onClick={() => setOpen(s.id)}>
+                      <td><span className={`st-rank r${rank <= 3 ? rank : 'n'}`}>{rank}</span></td>
+                      <td>
+                        <span className="st-who">
+                          <span className="st-avatar" aria-hidden="true">{s.fullName.trim().charAt(0).toUpperCase()}</span>
+                          <span className="st-id">
+                            <button type="button" className="st-open" onClick={(e) => { e.stopPropagation(); setOpen(s.id) }} aria-label={`View details for ${s.fullName}`}>{s.fullName}</button>
+                            <span className="tmuted adm-small">{s.email} · {s.phone}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="st-college"><span className="st-clip" title={s.institution}>{s.institution}</span><span className="st-pill">{s.branch}</span></td>
+                      <td><code className="st-roll">{s.rollNumber}</code></td>
+                      <td>
+                        <span className="st-prog" title={`${s.solved} of ${view.flagsTotal} flags · ${s.attempts} attempts`}>
+                          <span className="st-prog-n"><b>{s.solved}</b> / {view.flagsTotal}</span>
+                          <span className="st-bar" role="presentation"><i style={{ width: `${Math.min(100, (s.solved / view.flagsTotal) * 100)}%` }} /></span>
+                          <small className="tmuted">{s.attempts} tries</small>
+                        </span>
+                      </td>
+                      <td className="adm-num">
+                        <span className="st-score" title={`${s.score.toLocaleString('en-IN')} points · ${Math.round((s.score / view.maxScore) * 100)}% of the leader`}>
+                          <span className="st-score-n"><b>{s.score.toLocaleString('en-IN')}</b> pts</span>
+                          <span className="st-bar st-bar-g" role="presentation"><i style={{ width: `${Math.max(s.score > 0 ? 2 : 0, (s.score / view.maxScore) * 100)}%` }} /></span>
+                          <small className="tmuted">{s.score > 0 && s.score === view.maxScore ? 'leader' : `${Math.round((s.score / view.maxScore) * 100)}% of leader`}</small>
+                        </span>
+                      </td>
+                      <td className="adm-rowactions" onClick={(e) => e.stopPropagation()}>
+                        <button type="button" className="adm-btn sm" onClick={() => setAward(s)} aria-label={`Adjust points for ${s.fullName}`}>± pts</button>
+                        <button type="button" className="adm-btn sm" onClick={() => { setErrors({}); setEdit(s) }} aria-label={`Edit ${s.fullName}`}>edit</button>
+                        <button type="button" className="adm-btn sm danger" onClick={() => setDel(s)} aria-label={`Delete ${s.fullName}`}>delete</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="st-cards" aria-label="Students">
+            {view.shown.map((s) => {
+              const rank = view.rank.get(s.id) ?? 0
+              return (
+                <li key={s.id} className="st-card">
+                  <div className="st-card-top">
+                    <span className={`st-rank r${rank <= 3 ? rank : 'n'}`}>{rank}</span>
+                    <span className="st-avatar" aria-hidden="true">{s.fullName.trim().charAt(0).toUpperCase()}</span>
+                    <span className="st-id">
+                      <button type="button" className="st-open" onClick={() => setOpen(s.id)} aria-label={`View details for ${s.fullName}`}>{s.fullName}</button>
+                      <span className="tmuted adm-small">{s.email}</span>
+                    </span>
+                    <span className="st-card-score"><b>{s.score.toLocaleString('en-IN')}</b><small>pts</small></span>
+                  </div>
+                  <div className="st-card-meta"><span>{s.institution}</span><span className="st-pill">{s.branch}</span><code>{s.rollNumber}</code></div>
+                  <div className="st-prog"><span className="st-prog-n"><b>{s.solved}</b> / {view.flagsTotal} flags</span><span className="st-bar" role="presentation"><i style={{ width: `${Math.min(100, (s.solved / view.flagsTotal) * 100)}%` }} /></span></div>
+                  <div className="st-card-actions">
                     <button type="button" className="adm-btn sm" onClick={() => setAward(s)}>± pts</button>
                     <button type="button" className="adm-btn sm" onClick={() => { setErrors({}); setEdit(s) }}>edit</button>
                     <button type="button" className="adm-btn sm danger" onClick={() => setDel(s)}>delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
       )}
 
+      {open && (
+        <StudentDetail id={open} version={ver} onClose={() => setOpen(null)}
+          onAward={(s) => setAward(s)} onEdit={(s) => { setErrors({}); setEdit(s) }} onChanged={load} />
+      )}
       {edit && (
         <Modal title={edit === 'new' ? 'students --add' : `students --edit ${edit.id}`} onClose={() => setEdit(null)}>
           <form className="adm-form-grid" onSubmit={save} noValidate>
