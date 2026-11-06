@@ -4,7 +4,7 @@ import { pool } from '../config/db.js'
 import { invalidateBoard } from '../lib/boardCache.js'
 import { rateLimit } from '../lib/rateLimit.js'
 import { issueToken, requireAdmin } from '../lib/token.js'
-import { MAX_ATTEMPTS, hashAnswer } from './flags.js'
+import { MAX_ATTEMPTS, hashAnswer, intId } from './flags.js'
 
 const router = Router()
 
@@ -345,7 +345,8 @@ async function rescoreSolvers(conn, flagId, title, newPts, oldPts) {
 router.put('/flags/:id', async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
-    const id = Number(req.params.id)
+    const id = intId(req.params.id)
+    if (id === null) return res.status(404).json({ message: 'Flag not found.' })
     const b = req.body ?? {}
     const errors = validateFlag(b)
     if (Object.keys(errors).length) return res.status(422).json({ message: 'Fix the highlighted fields.', errors })
@@ -371,7 +372,8 @@ router.put('/flags/:id', async (req, res, next) => {
 // PATCH /api/admin/flags/:id/freeze { frozen } — pause/resume submissions for one flag
 router.patch('/flags/:id/freeze', async (req, res, next) => {
   try {
-    const id = Number(req.params.id)
+    const id = intId(req.params.id)
+    if (id === null) return res.status(404).json({ message: 'Flag not found.' })
     const [r] = await pool.query('UPDATE flags SET frozen = ? WHERE id = ?', [req.body?.frozen ? 1 : 0, id])
     if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
@@ -383,7 +385,8 @@ router.patch('/flags/:id/freeze', async (req, res, next) => {
 router.patch('/flags/:id/points', async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
-    const id = Number(req.params.id)
+    const id = intId(req.params.id)
+    if (id === null) return res.status(404).json({ message: 'Flag not found.' })
     const pts = Number(req.body?.points)
     if (!Number.isInteger(pts) || pts < 1 || pts > 100000) return res.status(422).json({ message: 'Points: whole number 1–100000.', errors: { points: 'Points: whole number 1–100000.' } })
     await conn.beginTransaction()
@@ -400,7 +403,9 @@ router.patch('/flags/:id/points', async (req, res, next) => {
 // DELETE /api/admin/flags/:id — cascades to submissions (scores already awarded are kept)
 router.delete('/flags/:id', async (req, res, next) => {
   try {
-    const [r] = await pool.query('DELETE FROM flags WHERE id = ?', [Number(req.params.id)])
+    const id = intId(req.params.id)
+    if (id === null) return res.status(404).json({ message: 'Flag not found.' })
+    const [r] = await pool.query('DELETE FROM flags WHERE id = ?', [id])
     if (!r.affectedRows) return res.status(404).json({ message: 'Flag not found.' })
     res.json({ ok: true })
   } catch (err) { next(err) }
@@ -414,7 +419,11 @@ router.get('/submissions', async (req, res, next) => {
     const where = []
     const args = []
     if (req.query.q) { where.push('(st.full_name LIKE ? OR st.email LIKE ?)'); args.push(`%${req.query.q}%`, `%${req.query.q}%`) }
-    if (req.query.flag) { where.push('s.flag_id = ?'); args.push(Number(req.query.flag)) }
+    if (req.query.flag) {
+      const fid = intId(req.query.flag)
+      if (fid === null) return res.status(400).json({ message: 'Invalid flag filter.' })
+      where.push('s.flag_id = ?'); args.push(fid)
+    }
     if (req.query.correct === '1' || req.query.correct === '0') { where.push('s.correct = ?'); args.push(Number(req.query.correct)) }
     const [rows] = await pool.query(
       `SELECT s.id, s.answer, s.correct, s.created_at, s.student_email AS student_id, st.full_name AS student, st.email, f.id AS flag_id, f.title AS flag, f.points
@@ -432,7 +441,8 @@ router.get('/submissions', async (req, res, next) => {
 router.delete('/submissions/:id', async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
-    const id = Number(req.params.id)
+    const id = intId(req.params.id)
+    if (id === null) return res.status(404).json({ message: 'Submission not found.' })
     const refund = req.query.refund === '1'
     await conn.beginTransaction()
     const [[sub]] = await conn.query(

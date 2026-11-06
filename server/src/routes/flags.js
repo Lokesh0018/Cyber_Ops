@@ -10,6 +10,8 @@ export const MAX_ATTEMPTS = 3
 
 /** Flags are compared case-insensitively with surrounding whitespace removed, then hashed. */
 export const normalize = (v) => String(v ?? '').trim().toLowerCase()
+/** A positive whole-number id from a URL/query value, or null (so 'abc' or '1; DROP' never reaches SQL as NaN). */
+export const intId = (v) => (/^[0-9]{1,10}$/.test(String(v)) && Number(v) > 0 ? Number(v) : null)
 export const hashAnswer = (v) => createHash('sha256').update(normalize(v)).digest('hex')
 
 // GET /api/flags — every flag with this student's progress (attempts used, solved). Answers never leave the server.
@@ -39,7 +41,8 @@ const submitLimit = rateLimit({ windowMs: 60_000, max: 20, key: (req) => `s:${re
 router.post('/:id/submit', requireAuth, submitLimit, async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
-    const flagId = Number(req.params.id)
+    const flagId = intId(req.params.id)
+    if (flagId === null) return res.status(404).json({ message: 'Unknown flag.' })
     const answer = String(req.body?.answer ?? '')
     if (!answer.trim()) return res.status(422).json({ message: 'Paste the flag first.' })
 
