@@ -306,15 +306,18 @@ router.post('/flags', async (req, res, next) => {
 // Each solver is adjusted by (new points - what they were actually credited for this flag, from score_events.flag_id), so it also
 // repairs any past drift (e.g. the value was edited before re-scoring existed). Every change is logged as a score event, keeping
 // students.score equal to the sum of score_events. Runs on the caller's connection, inside its transaction.
-async function rescoreSolvers(conn, flagId, title, newPts) {
+async function rescoreSolvers(conn, flagId, title, newPts, oldPts) {
   const [solvers] = await conn.query(
-    `SELECT s.student_email, COALESCE(SUM(e.points), 0) AS credited
+    `SELECT s.student_email, COUNT(e.id) AS linked, COALESCE(SUM(e.points), 0) AS credited
        FROM (SELECT DISTINCT student_email FROM submissions WHERE flag_id = ? AND correct = 1) s
        LEFT JOIN score_events e ON e.student_email = s.student_email AND e.flag_id = ?
       GROUP BY s.student_email`,
     [flagId, flagId],
   )
-  const changes = solvers.map((r) => ({ email: r.student_email, from: Number(r.credited), delta: newPts - Number(r.credited) })).filter((c) => c.delta !== 0)
+  // A solver with no linked events (a capture whose award was never tied to the flag) is assumed to hold the flag's previous value.
+  const changes = solvers
+    .map((r) => { const from = Number(r.linked) ? Number(r.credited) : oldPts; return { email: r.student_email, from, delta: newPts - from } })
+    .filter((c) => c.delta !== 0)
   for (const c of changes) {
     await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [c.delta, c.email])
     await conn.query('INSERT INTO score_events (student_email, points, note, flag_id) VALUES (?, ?, ?, ?)', [c.email, c.delta, `Points changed: ${title} (${c.from} → ${newPts})`.slice(0, 120), flagId])
@@ -343,7 +346,7 @@ router.put('/flags/:id', async (req, res, next) => {
       'UPDATE flags SET title = ?, points = ?, level = ?, frozen = ?, answer = ?, answer_hash = ?, question_url = ?, sort_order = ? WHERE id = ?',
       [title, newPts, b.level, b.frozen ? 1 : 0, answer, hashAnswer(answer), String(b.questionUrl ?? '').trim(), Number(b.sortOrder ?? 0), id],
     )
-    const { rescored, delta } = await rescoreSolvers(conn, id, title, newPts)
+    const { rescored, delta } = await rescoreSolvers(conn, id, title, newPts, old.points)
     await conn.commit()
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
     res.json({ flag: publicFlag(row), rescored, delta })
@@ -372,7 +375,7 @@ router.patch('/flags/:id/points', async (req, res, next) => {
     const [[old]] = await conn.query('SELECT id, title, points FROM flags WHERE id = ? FOR UPDATE', [id])
     if (!old) { await conn.rollback(); return res.status(404).json({ message: 'Flag not found.' }) }
     await conn.query('UPDATE flags SET points = ? WHERE id = ?', [pts, id])
-    const { rescored, delta } = await rescoreSolvers(conn, id, old.title, pts)
+    const { rescored, delta } = await rescoreSolvers(conn, id, old.title, pts, old.points)
     await conn.commit()
     const [[row]] = await pool.query(`${FLAG_SQL} WHERE f.id = ? GROUP BY f.id`, [id])
     res.json({ flag: publicFlag(row), rescored, delta })

@@ -97,4 +97,7 @@ export async function ensureSchema() {
     await pool.query('UPDATE score_events e JOIN flags f ON e.note = f.title SET e.flag_id = f.id WHERE e.flag_id IS NULL AND e.points > 0')
     await pool.query("UPDATE score_events e JOIN flags f ON e.note = CONCAT('Removed capture: ', f.title) SET e.flag_id = f.id WHERE e.flag_id IS NULL AND e.points < 0")
   }
+  // Live captures recorded by older server versions had no flag_id; link them (captures only: positive events titled exactly like a flag).
+  // Idempotent: once linked, a row no longer matches, so this is a no-op on later starts.
+  await pool.query('UPDATE score_events e JOIN flags f ON e.note = f.title SET e.flag_id = f.id WHERE e.flag_id IS NULL AND e.points > 0')
 }

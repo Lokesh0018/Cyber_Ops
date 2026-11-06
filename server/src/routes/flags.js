@@ -57,8 +57,16 @@ router.post('/:id/submit', requireAuth, submitLimit, async (req, res, next) => {
 
     const correct = hashAnswer(answer) === flag.answer_hash
     await conn.query('INSERT INTO submissions (student_email, flag_id, answer, correct) VALUES (?, ?, ?, ?)', [req.studentId, flagId, answer.trim().slice(0, 200), correct ? 1 : 0])
+    // An admin can delete a capture and keep its points (no refund). If the student still holds credit for this flag, a fresh correct
+    // answer is recorded but must not pay again; after a refund the net credit is 0, so a re-capture pays normally.
+    let paid = correct
     if (correct) {
-      await conn.query('INSERT INTO score_events (student_email, points, note) VALUES (?, ?, ?)', [req.studentId, flag.points, flag.title])
+      const [[held]] = await conn.query('SELECT COALESCE(SUM(points), 0) AS pts FROM score_events WHERE student_email = ? AND flag_id = ?', [req.studentId, flagId])
+      paid = Number(held.pts) <= 0
+    }
+    if (paid) {
+      // flag_id ties the award to its flag, so a later points change re-scores exactly what this student was credited
+      await conn.query('INSERT INTO score_events (student_email, points, note, flag_id) VALUES (?, ?, ?, ?)', [req.studentId, flag.points, flag.title, flagId])
       await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [flag.points, req.studentId])
     }
     await conn.commit()

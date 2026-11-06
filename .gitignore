@@ -42,3 +42,4 @@ Thumbs.db
 # Testing & coverage
 coverage/
 .nyc_output/
+BUGS_AND_TEST_REPORT.md
