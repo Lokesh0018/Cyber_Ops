@@ -24,7 +24,7 @@ export function AdminPage() {
           <span className="sr-only">signed in</span>
         </span>
         <nav className="dash-actions" aria-label="Account">
-          <button className="dash-logout" type="button" onClick={() => { signOut(); navigate('/admin', true) }}><LogoutIcon /> Logout</button>
+          <button className="dash-logout" type="button" onClick={() => { signOut(); navigate('/admin', true) }}><LogoutIcon /> <span className="dash-logout-t">Logout</span></button>
         </nav>
       </header>
       <main className="dash-main" id="main"><AdminDashboard /></main>

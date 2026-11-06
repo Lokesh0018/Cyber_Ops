@@ -117,13 +117,13 @@ if (!clear) {
             const at = new Date(Math.min(now - MIN, slotStart + (slotLen * (t + 1)) / (tries + 0.5)))
             const correct = !stuck && t === tries - 1
             subs.push([sid, flag.id, correct ? FLAGS[k][2] : WRONG[Math.floor(rand() * WRONG.length)], correct ? 1 : 0, at])
-            if (correct) { events.push([sid, flag.points, flag.title, at]); score += flag.points; nCaptures++ }
+            if (correct) { events.push([sid, flag.points, flag.title, at, flag.id]); score += flag.points; nCaptures++ }
           }
         }
         // One organiser bonus for the top student, so manual awards show up too.
-        if (i === 0) { events.push([sid, 50, 'Bonus: best writeup', new Date(now - 20 * MIN)]); score += 50 }
+        if (i === 0) { events.push([sid, 50, 'Bonus: best writeup', new Date(now - 20 * MIN), null]); score += 50 }
         if (subs.length) await conn.query('INSERT INTO submissions (student_email, flag_id, answer, correct, created_at) VALUES ?', [subs])
-        if (events.length) await conn.query('INSERT INTO score_events (student_email, points, note, created_at) VALUES ?', [events])
+        if (events.length) await conn.query('INSERT INTO score_events (student_email, points, note, created_at, flag_id) VALUES ?', [events])
         await conn.query('UPDATE students SET score = ? WHERE email = ?', [score, sid])
         nSubs += subs.length
       }

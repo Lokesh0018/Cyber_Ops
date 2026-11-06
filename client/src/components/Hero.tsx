@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import logo from '../assets/shm-logo.webp'
 import { heroStats } from '../data/content'
 import {
@@ -11,6 +10,8 @@ import {
   TrophyIcon,
 } from './Icons'
 import { useInView } from '../hooks/useInView'
+import { useState } from 'react'
+import { SCENE_TABS, TypingTerminal } from './TypingTerminal'
 
 const meta = [
   { Icon: ShieldIcon, label: 'Beginner → Advanced' },
@@ -18,19 +19,10 @@ const meta = [
   { Icon: ListIcon, label: '100+ Kali tools' },
 ]
 
-// Each line fades in on a stagger (--i); static when reduced motion is preferred.
-const lines = [
-  <><span className="p">$</span> <span className="c">./bootcamp</span> --days 2 --mode hands-on</>,
-  <><span className="o">[+] Loading Kali Linux toolset ....</span> <span className="ok">100+ ready</span></>,
-  <><span className="o">[+] Recon · Web · Network · Exploit </span> <span className="ok">online</span></>,
-  <><span className="o">[+] Lab targets ....................</span> <span className="ok">isolated</span></>,
-  <><span className="o">[+] Day 2 module ...................</span> <span className="v">SHM AutoVAPT</span></>,
-  <><span className="o">[*] CTF scoreboard live — capture the flag.</span></>,
-]
-
-// Replays the line-by-line reveal each time the terminal scrolls back into view.
+// The terminal types continuously while it is on screen (see TypingTerminal).
 function HeroVisual() {
   const { ref, inView } = useInView<HTMLDivElement>(0.3)
+  const [tab, setTab] = useState(0) // the title-bar tab follows the scene being typed
   return (
     <div className={inView ? 'hero-visual run' : 'hero-visual'} ref={ref} aria-hidden="true">
       <div className="hv-orb" />
@@ -39,25 +31,11 @@ function HeroVisual() {
         <div className="term-bar">
           <i /><i /><i />
           <span className="term-tabs">
-            <span className="tab on">bootcamp.sh</span>
-            <span className="tab">recon</span>
-            <span className="tab">ctf</span>
+            {SCENE_TABS.map((t, i) => <span key={t} className={i === tab ? 'tab on' : 'tab'}>{t}</span>)}
           </span>
           <span className="term-live"><span className="dot" /> LIVE</span>
         </div>
-        <div className="term-body">
-          {lines.map((line, i) => (
-            <div className="tl-line" style={{ '--i': i } as CSSProperties} key={i}>{line}</div>
-          ))}
-          <div className="tl-line tl-progress" style={{ '--i': lines.length } as CSSProperties}>
-            <span className="o">lab provisioning</span>
-            <span className="bar"><span /></span>
-            <span className="ok">100%</span>
-          </div>
-          <div className="tl-line" style={{ '--i': lines.length + 1 } as CSSProperties}>
-            <span className="p">participant@cyberops</span><span className="o">:~$</span> <span className="cursor" />
-          </div>
-        </div>
+        <TypingTerminal active={inView} onScene={setTab} />
       </div>
 
       <div className="float-card fc-ctf">
