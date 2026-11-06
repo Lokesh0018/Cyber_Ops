@@ -82,6 +82,8 @@ router.post('/:id/submit', requireAuth, submitLimit, async (req, res, next) => {
       : { correct: false, attempts, message: attempts >= MAX_ATTEMPTS ? 'Incorrect. No attempts left.' : `Incorrect. ${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? '' : 's'} left.` })
   } catch (err) {
     await conn.rollback().catch(() => {})
+    // A valid token for a student an organiser has since deleted: the submission's foreign key to students fails. Treat it as signed out.
+    if (err.code === 'ER_NO_REFERENCED_ROW_2') return res.status(401).json({ message: 'Please log in.' })
     next(err)
   } finally {
     conn.release()
