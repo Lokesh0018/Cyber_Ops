@@ -666,70 +666,200 @@ function Flags({ notify }: { notify: (t: Toast) => void }) {
 }
 
 /* ───────────────────────── submissions ───────────────────────── */
+const SUB_LIMIT = 300 // the server returns at most this many rows
+/** "just now" / "5m ago" / "3h ago", then the date. */
+const ago = (iso: string) => {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return fmtAt(iso)
+}
+
 function Submissions({ notify }: { notify: (t: Toast) => void }) {
   const { api } = useAdmin()
   const [rows, setRows] = useState<Submission[] | null>(null)
   const [flags, setFlags] = useState<Flag[]>([])
+  const [maxAttempts, setMaxAttempts] = useState(3)
   const [q, setQ] = useState('')
   const [flag, setFlag] = useState('')
-  const [correct, setCorrect] = useState('')
+  const [result, setResult] = useState<'all' | 'correct' | 'wrong'>('all') // client-side, so the chips can show counts for every result
   const [del, setDel] = useState<Submission | null>(null)
+  const [refund, setRefund] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [fresh, setFresh] = useState<Set<number>>(new Set()) // ids that arrived since the last refresh (briefly highlighted)
+  const lastId = useRef<number | null>(null)
+  const [, setTick] = useState(0)
 
-  useEffect(() => { api<{ flags: Flag[] }>('/flags').then((d) => setFlags(d.flags)).catch(() => {}) }, [api])
-  const load = useCallback(() => {
+  useEffect(() => {
+    api<{ flags: Flag[]; maxAttempts?: number }>('/flags').then((d) => { setFlags(d.flags); if (d.maxAttempts) setMaxAttempts(d.maxAttempts) }).catch(() => {})
+  }, [api])
+
+  const load = useCallback((quiet = false) => {
     const p = new URLSearchParams()
     if (q) p.set('q', q)
     if (flag) p.set('flag', flag)
-    if (correct) p.set('correct', correct)
-    api<{ submissions: Submission[] }>(`/submissions?${p}`).then((d) => setRows(d.submissions)).catch((e: Error) => notify({ kind: 'error', text: e.message }))
-  }, [api, q, flag, correct, notify])
-  useEffect(() => { const t = window.setTimeout(load, q ? 250 : 0); return () => window.clearTimeout(t) }, [load, q])
+    api<{ submissions: Submission[] }>(`/submissions?${p}`).then((d) => {
+      const newest = d.submissions[0]?.id ?? 0
+      if (lastId.current != null && newest > lastId.current) setFresh(new Set(d.submissions.filter((r) => r.id > (lastId.current as number)).map((r) => r.id)))
+      lastId.current = Math.max(lastId.current ?? 0, newest)
+      setRows(d.submissions)
+    }).catch((e: Error) => { if (!quiet) notify({ kind: 'error', text: e.message }) })
+  }, [api, q, flag, notify])
+  useEffect(() => { lastId.current = null; setFresh(new Set()) }, [q, flag]) // a new filter is a new baseline, not "new activity"
+  useEffect(() => { const t = window.setTimeout(() => load(), q ? 250 : 0); return () => window.clearTimeout(t) }, [load, q])
+  // keep the audit log live: refresh every 10s while the tab is visible, and re-render relative times every 30s
+  useEffect(() => {
+    const poll = () => { if (document.visibilityState === 'visible') load(true) }
+    const a = window.setInterval(poll, 10000)
+    const b = window.setInterval(() => setTick((t) => t + 1), 30000)
+    document.addEventListener('visibilitychange', poll)
+    return () => { window.clearInterval(a); window.clearInterval(b); document.removeEventListener('visibilitychange', poll) }
+  }, [load])
+
+  const view = useMemo(() => {
+    const all = rows ?? []
+    const level = new Map(flags.map((f) => [f.id, f.level]))
+    const right = all.filter((r) => r.correct).length
+    const shown = all.filter((r) => result === 'all' || (result === 'correct') === !!r.correct)
+    // "attempt n of max" per student and flag; only trustworthy while the list isn't cut off at the server limit
+    const seen = new Map<string, number>()
+    const attempt = new Map<number, number>()
+    for (const r of [...all].reverse()) { const k = `${r.student_id}|${r.flag_id}`; const n = (seen.get(k) ?? 0) + 1; seen.set(k, n); attempt.set(r.id, n) }
+    return {
+      all, shown, level, attempt, right, wrong: all.length - right, complete: all.length < SUB_LIMIT,
+      students: new Set(all.map((r) => r.student_id)).size, flagsN: new Set(all.map((r) => r.flag_id)).size,
+      hit: all.length ? Math.round((right / all.length) * 100) : 0,
+    }
+  }, [rows, flags, result])
 
   const doDelete = async () => {
     if (busy || !del) return
     setBusy(true)
-    try { await api(`/submissions/${del.id}`, { method: 'DELETE' }); notify({ kind: 'ok', text: 'Submission removed — the student gets that attempt back.' }); setDel(null); load() }
-    catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
+    try {
+      const r = await api<{ refunded?: number }>(`/submissions/${del.id}${del.correct && refund ? '?refund=1' : ''}`, { method: 'DELETE' })
+      notify({ kind: 'ok', text: `Submission removed. ${del.student} gets that attempt back${r.refunded ? ` and ${r.refunded.toLocaleString('en-IN')} points were taken back` : ''}.` })
+      setDel(null); load()
+    } catch (err) { notify({ kind: 'error', text: (err as Error).message }) } finally { setBusy(false) }
   }
 
+  const resultBadge = (r: Submission) => (
+    <span className={`sb-badge ${r.correct ? 'ok' : 'bad'}`}>
+      {r.correct ? `[✓] correct +${r.points.toLocaleString('en-IN')}` : '[✗] wrong'}
+    </span>
+  )
+  const attemptNote = (r: Submission) => (view.complete ? <small className="tmuted sb-attempt">attempt {view.attempt.get(r.id)}/{maxAttempts}</small> : null)
+  const avatar = (name: string) => <span className="st-avatar" aria-hidden="true">{name.trim().charAt(0).toUpperCase()}</span>
+  const flagCell = (r: Submission) => (
+    <>
+      <span className="fl-name"><b>{r.flag}</b>{view.level.get(r.flag_id) && <span className={`adm-lvl t-${view.level.get(r.flag_id)}`}>{view.level.get(r.flag_id)}</span>}</span>
+      <small className="tmuted">{r.points.toLocaleString('en-IN')} pts</small>
+    </>
+  )
+  const removeBtn = (r: Submission) => (
+    <button type="button" className="adm-btn sm danger" onClick={() => { setRefund(true); setDel(r) }} aria-label={`Remove this ${r.correct ? 'correct' : 'wrong'} submission by ${r.student} for ${r.flag}`}>remove</button>
+  )
+
   return (
-    <section className="dcard dcard-wide" aria-labelledby="a-sub">
+    <section className="dcard dcard-wide st sb" aria-labelledby="a-sub">
       <div className="dcard-head">
-        <h2 id="a-sub" className="dcard-h"><span className="tp-dollar">$</span> ./submissions --audit {rows && <span className="tmuted">({rows.length}{rows.length === 300 ? '+' : ''})</span>}</h2>
+        <h2 id="a-sub" className="dcard-h"><span className="tp-dollar">$</span> ./submissions --audit {rows && <span className="tmuted">({view.shown.length}{view.shown.length !== rows.length ? ` of ${rows.length}` : ''}{rows.length >= SUB_LIMIT ? '+' : ''})</span>}</h2>
         <div className="adm-tools">
-          <label className="adm-search"><SearchIcon /><span className="sr-only">Search by student</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="student name or email" /></label>
-          <label className="adm-select"><span className="sr-only">Flag</span>
-            <select value={flag} onChange={(e) => setFlag(e.target.value)}><option value="">all flags</option>{flags.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select>
-          </label>
-          <label className="adm-select"><span className="sr-only">Result</span>
-            <select value={correct} onChange={(e) => setCorrect(e.target.value)}><option value="">any result</option><option value="1">correct</option><option value="0">wrong</option></select>
+          <label className="adm-search">
+            <SearchIcon /><span className="sr-only">Search by student</span>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="student name or email" />
+            {q && <button type="button" className="st-clear" onClick={() => setQ('')} aria-label="Clear search"><CloseIcon /></button>}
           </label>
         </div>
       </div>
 
-      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
-      {rows && rows.length === 0 && <p className="tmuted">No submissions match.</p>}
-      {rows && rows.length > 0 && (
-        <div className="adm-tablewrap">
-          <table className="lb-table adm-table">
-            <thead><tr><th>when</th><th>student</th><th>flag</th><th>answer</th><th>result</th><th className="sr-only">actions</th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className={r.correct ? 'adm-ok' : ''}>
-                  <td className="adm-nowrap">{fmtAt(r.created_at)}</td>
-                  <td><b>{r.student}</b><br /><span className="tmuted adm-small">{r.email}</span></td>
-                  <td>{r.flag} <span className="tmuted adm-small">· {r.points} pts</span></td>
-                  <td><code className="adm-ans">{r.answer}</code></td>
-                  <td>{r.correct ? <span className="adm-res ok">[✓] correct</span> : <span className="adm-res bad">[✗] wrong</span>}</td>
-                  <td className="adm-rowactions"><button type="button" className="adm-btn sm danger" onClick={() => setDel(r)}>remove</button></td>
-                </tr>
+      {rows && (
+        <>
+          <ul className="st-stats" aria-label="Summary">
+            <li><small>submissions</small><b>{view.all.length}{view.complete ? '' : '+'}</b><span>{view.students} student{view.students === 1 ? '' : 's'} · {view.flagsN} flag{view.flagsN === 1 ? '' : 's'}</span></li>
+            <li><small>correct</small><b className="sb-n-ok">{view.right}</b><span>{view.hit}% hit rate</span></li>
+            <li><small>wrong</small><b className="sb-n-bad">{view.wrong}</b></li>
+            <li><small>live</small><b className="sb-live"><i aria-hidden="true" />on</b><span>refreshes every 10s</span></li>
+          </ul>
+          <div className="st-filters">
+            <div className="st-chips" role="group" aria-label="Filter by result">
+              {(['all', 'correct', 'wrong'] as const).map((k) => (
+                <button key={k} type="button" data-res={k} aria-pressed={result === k} onClick={() => setResult(k)}>{k} <i>{k === 'all' ? view.all.length : k === 'correct' ? view.right : view.wrong}</i></button>
               ))}
-            </tbody>
-          </table>
+            </div>
+            <label className="adm-select st-sort"><span className="sr-only">Flag</span>
+              <select value={flag} onChange={(e) => setFlag(e.target.value)}><option value="">all flags</option>{flags.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select>
+            </label>
+          </div>
+        </>
+      )}
+
+      {!rows && <p className="tmuted"><span className="tspin" aria-hidden="true" /> loading…</p>}
+      {rows && rows.length === 0 && (
+        <div className="st-empty">
+          <p><b>{q || flag ? 'No submissions match these filters.' : 'No submissions yet.'}</b></p>
+          <p className="tmuted">{q || flag ? 'Try a different name, email or flag.' : 'Attempts appear here live as students submit flags.'}</p>
+          {(q || flag) && <button type="button" className="adm-btn sm" onClick={() => { setQ(''); setFlag('') }}>clear filters</button>}
         </div>
       )}
-      {del && <Confirm text={`Remove this ${del.correct ? 'correct' : 'wrong'} submission by ${del.student}?`} detail={del.correct ? 'The flag shows as unsolved again for them. Points already awarded are NOT removed — adjust the score from the students tab if needed.' : 'They get the attempt back on this flag.'} onYes={doDelete} onNo={() => setDel(null)} busy={busy} />}
+      {rows && rows.length > 0 && view.shown.length === 0 && <p className="tmuted">No {result} submissions in this view.</p>}
+
+      {view.shown.length > 0 && (
+        <>
+          <div className="adm-tablewrap st-table sb-table">
+            <table className="lb-table adm-table">
+              <colgroup><col className="c-sb-when" /><col /><col className="c-sb-flag" /><col className="c-sb-ans" /><col className="c-sb-res" /><col className="c-sb-act" /></colgroup>
+              <thead><tr><th>when</th><th>student</th><th>flag</th><th>answer</th><th>result</th><th className="sr-only">actions</th></tr></thead>
+              <tbody>
+                {view.shown.map((r) => (
+                  <tr key={r.id} className={`sb-row ${r.correct ? 'ok' : 'bad'}${fresh.has(r.id) ? ' ov-new' : ''}`}>
+                    <td className="sb-when"><time dateTime={r.created_at} title={fmtAt(r.created_at)}>{ago(r.created_at)}</time><small className="tmuted">{fmtAt(r.created_at)}</small></td>
+                    <td><span className="st-who">{avatar(r.student)}<span className="st-id"><b>{r.student}</b><span className="tmuted adm-small">{r.email}</span></span></span></td>
+                    <td>{flagCell(r)}</td>
+                    <td><code className="sb-ans" title={r.answer}>{r.answer}</code></td>
+                    <td>{resultBadge(r)}{attemptNote(r)}</td>
+                    <td className="adm-rowactions">{removeBtn(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="st-cards sb-cards" aria-label="Submissions">
+            {view.shown.map((r) => (
+              <li key={r.id} className={`st-card sb-card ${r.correct ? 'ok' : 'bad'}${fresh.has(r.id) ? ' ov-new' : ''}`}>
+                <div className="st-card-top">
+                  {avatar(r.student)}
+                  <span className="st-id"><b>{r.student}</b><span className="tmuted adm-small">{r.email}</span></span>
+                  <time className="tmuted adm-small" dateTime={r.created_at}>{ago(r.created_at)}</time>
+                </div>
+                <div className="sb-card-row">{resultBadge(r)}{attemptNote(r)}</div>
+                <div className="sb-card-flag">{flagCell(r)}</div>
+                <code className="sb-ans" title={r.answer}>{r.answer}</code>
+                <div className="st-card-actions">{removeBtn(r)}</div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {del && (
+        <Modal title="submissions --remove" onClose={() => { if (!busy) setDel(null) }}>
+          <p className="adm-confirm">Remove this {del.correct ? 'correct' : 'wrong'} submission by {del.student} for {del.flag}?</p>
+          <code className="sd-answer">{del.answer}</code>
+          <p className="tmuted adm-confirm-sub">{del.correct ? 'The flag shows as unsolved again for them, and they get the attempt back.' : 'They get this attempt back on the flag.'}</p>
+          {del.correct && (
+            <label className="sd-check">
+              <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)} />
+              <span>Also take back the points this capture awarded. Leave this ticked unless you plan to adjust the score yourself, otherwise they could earn the flag a second time.</span>
+            </label>
+          )}
+          <div className="adm-actions">
+            <button type="button" className="adm-btn" onClick={() => setDel(null)} disabled={busy} autoFocus>cancel</button>
+            <button type="button" className="adm-btn danger" onClick={doDelete} disabled={busy} aria-busy={busy}>{busy ? 'removing…' : 'yes, remove'}</button>
+          </div>
+        </Modal>
+      )}
     </section>
   )
 }
