@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import { Router } from 'express'
 import { pool } from '../config/db.js'
+import { invalidateBoard } from '../lib/boardCache.js'
+import { rateLimit } from '../lib/rateLimit.js'
 import { requireAuth } from '../lib/token.js'
 
 const router = Router()
@@ -32,7 +34,9 @@ router.get('/', requireAuth, async (req, res, next) => {
 })
 
 // POST /api/flags/:id/submit { answer } — at most MAX_ATTEMPTS per flag; a correct answer awards the points once.
-router.post('/:id/submit', requireAuth, async (req, res, next) => {
+// Each flag already allows only MAX_ATTEMPTS tries; this also stops a script hammering the endpoint (and the database) across flags.
+const submitLimit = rateLimit({ windowMs: 60_000, max: 20, key: (req) => `s:${req.studentId}`, message: 'Slow down: too many submissions. Try again in a minute.' })
+router.post('/:id/submit', requireAuth, submitLimit, async (req, res, next) => {
   const conn = await pool.getConnection()
   try {
     const flagId = Number(req.params.id)
@@ -58,6 +62,7 @@ router.post('/:id/submit', requireAuth, async (req, res, next) => {
       await conn.query('UPDATE students SET score = score + ? WHERE email = ?', [flag.points, req.studentId])
     }
     await conn.commit()
+    if (correct) invalidateBoard() // a capture changes the ranking and the score-over-time chart
     const attempts = Number(st.attempts) + 1
     res.json(correct
       ? { correct: true, attempts, points: flag.points, message: `Correct — +${flag.points} points.` }

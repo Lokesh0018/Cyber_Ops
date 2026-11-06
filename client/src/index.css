@@ -1479,6 +1479,8 @@ html:has(.authpage){scrollbar-gutter:stable}
   .fb-submit{flex:1}
 }
 
+/* shown for a moment while a lazily loaded route (admin, dashboard, login) downloads */
+.route-wait{min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#080f1f;color:#91a6c7;font-family:var(--m,ui-monospace,monospace);font-size:.85rem;letter-spacing:.08em}
 /* ══════════ admin console ══════════ */
 .adm-login{display:grid;place-items:center}
 .adm-win{max-width:440px;box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 60px rgba(0,184,255,.08),0 0 0 1px rgba(0,184,255,.08)}

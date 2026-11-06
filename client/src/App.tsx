@@ -1,9 +1,5 @@
-import { AdminPage } from './components/admin/AdminPage'
 import { Arsenal } from './components/Arsenal'
-import { AuthPage } from './components/AuthPage'
 import { Ctf } from './components/Ctf'
-import { Dashboard } from './components/Dashboard'
-import { Profile } from './components/Profile'
 import { Footer } from './components/Footer'
 import { Hero } from './components/Hero'
 import { Navbar } from './components/Navbar'
@@ -14,7 +10,14 @@ import { Spotlight } from './components/Spotlight'
 import { WelcomeBanner } from './components/WelcomeBanner'
 import { useAuth } from './hooks/useAuth'
 import { navigate, usePathname } from './hooks/useRoute'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
+
+// Code-split: a visitor to the landing page doesn't download the admin console, the student dashboard or the auth screens (and vice versa).
+const AdminPage = lazy(() => import('./components/admin/AdminPage').then((m) => ({ default: m.AdminPage })))
+const AuthPage = lazy(() => import('./components/AuthPage').then((m) => ({ default: m.AuthPage })))
+const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Profile = lazy(() => import('./components/Profile').then((m) => ({ default: m.Profile })))
+const RouteWait = () => <div className="route-wait" role="status" aria-live="polite">loading…</div>
 
 const CONSOLE = ['/dashboard', '/profile']
 const ADMIN = '/admin'
@@ -33,7 +36,7 @@ export default function App() {
     return (
       <>
         <a className="skip" href="#main">Skip to content</a>
-        <AdminPage />
+        <Suspense fallback={<RouteWait />}><AdminPage /></Suspense>
       </>
     )
   }
@@ -42,7 +45,7 @@ export default function App() {
     return (
       <>
         <a className="skip" href="#main">Skip to content</a>
-        {path === '/profile' ? <Profile /> : <Dashboard />}
+        <Suspense fallback={<RouteWait />}>{path === '/profile' ? <Profile /> : <Dashboard />}</Suspense>
       </>
     )
   }
@@ -50,7 +53,7 @@ export default function App() {
     return (
       <>
         <a className="skip" href="#main">Skip to content</a>
-        <AuthPage mode={path === '/login' ? 'login' : 'register'} />
+        <Suspense fallback={<RouteWait />}><AuthPage mode={path === '/login' ? 'login' : 'register'} /></Suspense>
       </>
     )
   }

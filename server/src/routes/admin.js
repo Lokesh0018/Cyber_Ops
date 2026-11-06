@@ -1,6 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { Router } from 'express'
 import { pool } from '../config/db.js'
+import { invalidateBoard } from '../lib/boardCache.js'
+import { rateLimit } from '../lib/rateLimit.js'
 import { issueToken, requireAdmin } from '../lib/token.js'
 import { MAX_ATTEMPTS, hashAnswer } from './flags.js'
 
@@ -25,7 +27,8 @@ const publicStudent = (r) => ({
 })
 
 // POST /api/admin/login { email, password }
-router.post('/login', (req, res) => {
+const adminLoginLimit = rateLimit({ windowMs: 15 * 60_000, max: 10, key: (req) => `admin:${req.ip}`, message: 'Too many admin sign-in attempts. Please wait 15 minutes and try again.' })
+router.post('/login', adminLoginLimit, (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase()
   const password = String(req.body?.password ?? '')
   if (!same(email, ADMIN_EMAIL) || !same(password, ADMIN_PASSWORD)) {
@@ -35,6 +38,8 @@ router.post('/login', (req, res) => {
 })
 
 router.use(requireAdmin)
+// Any admin change (scores, students, flags, submissions) can alter the public leaderboard: drop its cache once the response is sent.
+router.use((req, res, next) => { if (req.method !== 'GET') res.on('finish', invalidateBoard); next() })
 
 // GET /api/admin/me
 router.get('/me', (_req, res) => res.json({ admin: { email: ADMIN_EMAIL } }))
@@ -47,32 +52,33 @@ router.get('/stats', async (req, res, next) => {
     const hours = RANGE_HOURS[req.query.range] ?? 6
     const BUCKETS = 24
     const bucketSec = Math.round((hours * 3600) / BUCKETS)
-    const [[s]] = await pool.query('SELECT COUNT(*) AS students, COALESCE(SUM(score),0) AS points, COUNT(DISTINCT institution) AS colleges FROM students')
-    const [[f]] = await pool.query('SELECT COUNT(*) AS flags, COALESCE(SUM(points),0) AS total FROM flags')
-    const [[sub]] = await pool.query('SELECT COUNT(*) AS submissions, COALESCE(SUM(correct),0) AS captures FROM submissions')
-    const [perFlag] = await pool.query(
-      `SELECT f.id, f.title, f.points, COUNT(s.id) AS attempts, COALESCE(SUM(s.correct),0) AS captures
-         FROM flags f LEFT JOIN submissions s ON s.flag_id = f.id GROUP BY f.id ORDER BY f.sort_order, f.id`,
-    )
-    const [recent] = await pool.query(
-      `SELECT s.id, s.correct, s.created_at, s.answer, st.full_name AS student, f.title AS flag
-         FROM submissions s JOIN students st ON st.email = s.student_email JOIN flags f ON f.id = s.flag_id
-        ORDER BY s.id DESC LIMIT 12`,
-    )
-    const [bucketRows] = await pool.query(
-      `SELECT FLOOR((UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_at)) / ?) AS ago, COUNT(*) AS attempts, COALESCE(SUM(correct),0) AS captures
-         FROM submissions WHERE created_at >= NOW() - INTERVAL ? SECOND GROUP BY ago`,
-      [bucketSec, bucketSec * BUCKETS],
-    )
+    // Independent queries: run them together instead of one after another (the pool has 10 connections).
+    const [[[s]], [[f]], [[sub]], [perFlag], [recent], [bucketRows], [topStudents], [byCollege]] = await Promise.all([
+      pool.query('SELECT COUNT(*) AS students, COALESCE(SUM(score),0) AS points, COUNT(DISTINCT institution) AS colleges FROM students'),
+      pool.query('SELECT COUNT(*) AS flags, COALESCE(SUM(points),0) AS total FROM flags'),
+      pool.query('SELECT COUNT(*) AS submissions, COALESCE(SUM(correct),0) AS captures FROM submissions'),
+      pool.query(
+        `SELECT f.id, f.title, f.points, COUNT(s.id) AS attempts, COALESCE(SUM(s.correct),0) AS captures
+           FROM flags f LEFT JOIN submissions s ON s.flag_id = f.id GROUP BY f.id ORDER BY f.sort_order, f.id`,
+      ),
+      pool.query(
+        `SELECT s.id, s.correct, s.created_at, s.answer, st.full_name AS student, f.title AS flag
+           FROM submissions s JOIN students st ON st.email = s.student_email JOIN flags f ON f.id = s.flag_id
+          ORDER BY s.id DESC LIMIT 12`,
+      ),
+      pool.query(
+        `SELECT FLOOR((UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(created_at)) / ?) AS ago, COUNT(*) AS attempts, COALESCE(SUM(correct),0) AS captures
+           FROM submissions WHERE created_at >= NOW() - INTERVAL ? SECOND GROUP BY ago`,
+        [bucketSec, bucketSec * BUCKETS],
+      ),
+      pool.query('SELECT email AS id, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC LIMIT 5'),
+      pool.query('SELECT institution, COUNT(*) AS students, COALESCE(SUM(score),0) AS points FROM students GROUP BY institution ORDER BY points DESC, students DESC LIMIT 6'),
+    ])
     const timeline = Array.from({ length: BUCKETS }, () => ({ attempts: 0, captures: 0 }))
     for (const r of bucketRows) {
       const i = BUCKETS - 1 - Number(r.ago)
       if (i >= 0 && i < BUCKETS) timeline[i] = { attempts: Number(r.attempts), captures: Number(r.captures) }
     }
-    const [topStudents] = await pool.query('SELECT email AS id, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC LIMIT 5')
-    const [byCollege] = await pool.query(
-      'SELECT institution, COUNT(*) AS students, COALESCE(SUM(score),0) AS points FROM students GROUP BY institution ORDER BY points DESC, students DESC LIMIT 6',
-    )
     res.json({
       students: Number(s.students), points: Number(s.points), colleges: Number(s.colleges),
       flags: Number(f.flags), totalPoints: Number(f.total),

@@ -2,7 +2,13 @@
 // Payload carries the student id and an expiry; the secret comes from AUTH_SECRET.
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
-const SECRET = process.env.AUTH_SECRET ?? 'dev-only-change-me'
+const DEV_SECRET = 'dev-only-change-me'
+const SECRET = process.env.AUTH_SECRET ?? DEV_SECRET
+if (SECRET === DEV_SECRET || SECRET.length < 16) {
+  // Tokens are signed with this secret: with the public default, anyone can forge a student or admin login.
+  if (process.env.NODE_ENV === 'production') throw new Error('Set AUTH_SECRET (16+ random characters) in the server environment before running in production.')
+  console.warn('[security] AUTH_SECRET is missing or too short, so login tokens can be forged. Add AUTH_SECRET=<long random string> to server/.env.')
+}
 const TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
 const b64 = (buf) => Buffer.from(buf).toString('base64url')

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import { Router } from 'express'
 import { pool } from '../config/db.js'
+import { board, invalidateBoard } from '../lib/boardCache.js'
+import { rateLimit } from '../lib/rateLimit.js'
 import { issueToken, requireAuth } from '../lib/token.js'
 
 const router = Router()
@@ -54,6 +56,7 @@ router.post('/register', async (req, res, next) => {
       [b.fullName.trim(), email, b.phone.trim(), b.institution.trim(), b.branch.trim(), normRoll(b.rollNumber)],
     )
     const [[row]] = await pool.query('SELECT * FROM students WHERE email = ?', [email])
+    invalidateBoard() // a new student joins the ranking
     res.status(201).json({ token: issueToken(row.email), student: publicStudent(row) })
   } catch (err) {
     next(err)
@@ -61,7 +64,11 @@ router.post('/register', async (req, res, next) => {
 })
 
 // POST /api/auth/login — registered email + roll number
-router.post('/login', async (req, res, next) => {
+// Login is email + roll number, so guessing is the main attack. Limit per email (stops guessing one account from anywhere)
+// and per IP (stops sweeping many accounts), with headroom for a whole class behind one college NAT.
+const loginByEmail = rateLimit({ windowMs: 10 * 60_000, max: 10, key: (req) => `e:${String(req.body?.email ?? '').trim().toLowerCase()}`, message: 'Too many login attempts for this email. Please wait 10 minutes and try again.' })
+const loginByIp = rateLimit({ windowMs: 10 * 60_000, max: 200, key: (req) => `ip:${req.ip}`, message: 'Too many login attempts from this network. Please wait a few minutes and try again.' })
+router.post('/login', loginByIp, loginByEmail, async (req, res, next) => {
   try {
     const email = String(req.body?.email ?? '').trim().toLowerCase()
     const roll = normRoll(req.body?.rollNumber)
@@ -94,32 +101,35 @@ router.get('/me', requireAuth, async (req, res, next) => {
 // Scores come from score_events (awarded by organisers); students.score holds the running total.
 router.get('/leaderboard', requireAuth, async (req, res, next) => {
   try {
-    // Students are keyed by email, which must never reach other students: the public list carries an opaque id derived from it.
-    const [rows] = await pool.query(
-      'SELECT email, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC',
-    )
-    const all = rows.map(({ email, ...r }) => ({ id: publicId(email), ...r, _email: email }))
-    const top = all.slice(0, 10)
+    // Built at most once per few seconds for everyone (see lib/boardCache.js); only "me" is computed per request.
+    const b = await board(buildBoard)
     const meId = publicId(req.studentId)
-    const meRow = all.find((r) => r.id === meId)
-    const rank = meRow ? all.findIndex((r) => r.id === meId) + 1 : all.length
-    let series = []
-    if (top.length) {
-      const [events] = await pool.query(
-        'SELECT student_email, points, created_at FROM score_events WHERE student_email IN (?) ORDER BY created_at ASC, id ASC',
-        [top.map((r) => r._email)],
-      )
-      series = top.map((r) => {
-        let running = 0
-        const points = events.filter((e) => e.student_email === r._email).map((e) => ({ t: e.created_at, score: (running += e.points) }))
-        return { id: r.id, name: r.name, points }
-      })
-    }
-    const strip = ({ _email, ...r }) => r
-    res.json({ all: all.map(strip), top: top.map(strip), series, me: { id: meId, score: meRow?.score ?? 0, rank, total: all.length } })
+    res.json({ all: b.all, top: b.top, series: b.series, me: { id: meId, score: b.scoreOf.get(meId) ?? 0, rank: b.rankOf.get(meId) ?? b.all.length, total: b.all.length } })
   } catch (err) {
     next(err)
   }
 })
+
+// Students are keyed by email, which must never reach other students: the public list carries an opaque id derived from it.
+async function buildBoard() {
+  const [rows] = await pool.query('SELECT email, full_name AS name, institution, score FROM students ORDER BY score DESC, full_name ASC')
+  const all = rows.map(({ email, ...r }) => ({ id: publicId(email), ...r }))
+  const top = all.slice(0, 10)
+  let series = []
+  if (top.length) {
+    const emails = rows.slice(0, 10).map((r) => r.email)
+    const [events] = await pool.query(
+      'SELECT student_email, points, created_at FROM score_events WHERE student_email IN (?) ORDER BY created_at ASC, id ASC',
+      [emails],
+    )
+    const byEmail = new Map(emails.map((e) => [e, []]))
+    for (const e of events) byEmail.get(e.student_email)?.push(e)
+    series = top.map((r, i) => {
+      let running = 0
+      return { id: r.id, name: r.name, points: byEmail.get(emails[i]).map((e) => ({ t: e.created_at, score: (running += e.points) })) }
+    })
+  }
+  return { all, top, series, rankOf: new Map(all.map((r, i) => [r.id, i + 1])), scoreOf: new Map(all.map((r) => [r.id, r.score])) }
+}
 
 export default router

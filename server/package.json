@@ -11,6 +11,7 @@
     "db:seed": "node --env-file=.env src/config/seed.js"
   },
   "dependencies": {
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "mysql2": "^3.11.5"
