@@ -27,14 +27,21 @@ const publicStudent = (row) => ({
 })
 
 /** Field-level validation; returns {field: message} (empty when valid). */
+// Maximum lengths match the column sizes in config/schema.js; without them an over-long value fails in MySQL as a 500.
 function validateRegistration(b) {
+  const t = (v) => (typeof v === 'string' ? v.trim() : '') // anything that isn't a string (object, array, number) counts as empty
   const errors = {}
-  if (!b.fullName || b.fullName.trim().length < 2) errors.fullName = 'Enter your full name.'
-  if (!EMAIL_RE.test(b.email ?? '')) errors.email = 'Enter a valid email address.'
-  if (!PHONE_RE.test(b.phone ?? '')) errors.phone = 'Enter a 10-digit mobile number.'
-  if (!b.institution || b.institution.trim().length < 2) errors.institution = 'Enter your college or organisation.'
-  if (!b.branch || b.branch.trim().length < 2) errors.branch = 'Enter your branch / department.'
-  if (!ROLL_RE.test(normRoll(b.rollNumber))) errors.rollNumber = 'Enter your roll number (3–30 letters/digits).'
+  const name = t(b.fullName), email = t(b.email), inst = t(b.institution), branch = t(b.branch)
+  if (name.length < 2) errors.fullName = 'Enter your full name.'
+  else if (name.length > 120) errors.fullName = 'Name is too long (max 120 characters).'
+  if (!EMAIL_RE.test(email)) errors.email = 'Enter a valid email address.'
+  else if (email.length > 190) errors.email = 'Email is too long (max 190 characters).'
+  if (!PHONE_RE.test(t(b.phone))) errors.phone = 'Enter a 10-digit mobile number.'
+  if (inst.length < 2) errors.institution = 'Enter your college or organisation.'
+  else if (inst.length > 160) errors.institution = 'Too long (max 160 characters).'
+  if (branch.length < 2) errors.branch = 'Enter your branch / department.'
+  else if (branch.length > 80) errors.branch = 'Too long (max 80 characters).'
+  if (!ROLL_RE.test(normRoll(t(b.rollNumber)))) errors.rollNumber = 'Enter your roll number (3–30 letters/digits).'
   return errors
 }
 

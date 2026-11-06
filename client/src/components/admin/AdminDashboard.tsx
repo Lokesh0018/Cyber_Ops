@@ -349,12 +349,12 @@ function Students({ notify }: { notify: (t: Toast) => void }) {
       {edit && (
         <Modal title={edit === 'new' ? 'students --add' : `students --edit ${edit.id}`} onClose={() => setEdit(null)}>
           <form className="adm-form-grid" onSubmit={save} noValidate>
-            <Field id="st-name" label="Full name" error={errors.fullName}><input id="st-name" name="fullName" defaultValue={cur.fullName} required autoFocus /></Field>
-            <Field id="st-email" label="Email" error={errors.email}><input id="st-email" name="email" type="email" defaultValue={cur.email} required /></Field>
-            <Field id="st-phone" label="Mobile" error={errors.phone} hint="10 digits"><input id="st-phone" name="phone" inputMode="numeric" defaultValue={cur.phone} required /></Field>
-            <Field id="st-roll" label="Roll number" error={errors.rollNumber} hint="Used as the login secret"><input id="st-roll" name="rollNumber" defaultValue={cur.rollNumber} required /></Field>
-            <Field id="st-inst" label="Institution" error={errors.institution}><input id="st-inst" name="institution" defaultValue={cur.institution} required /></Field>
-            <Field id="st-branch" label="Branch" error={errors.branch}><input id="st-branch" name="branch" defaultValue={cur.branch} required /></Field>
+            <Field id="st-name" label="Full name" error={errors.fullName}><input id="st-name" name="fullName" defaultValue={cur.fullName} maxLength={120} required autoFocus /></Field>
+            <Field id="st-email" label="Email" error={errors.email}><input id="st-email" name="email" type="email" defaultValue={cur.email} maxLength={190} required /></Field>
+            <Field id="st-phone" label="Mobile" error={errors.phone} hint="10 digits"><input id="st-phone" name="phone" inputMode="numeric" defaultValue={cur.phone} maxLength={10} required /></Field>
+            <Field id="st-roll" label="Roll number" error={errors.rollNumber} hint="Used as the login secret"><input id="st-roll" name="rollNumber" defaultValue={cur.rollNumber} maxLength={30} required /></Field>
+            <Field id="st-inst" label="Institution" error={errors.institution}><input id="st-inst" name="institution" defaultValue={cur.institution} maxLength={160} required /></Field>
+            <Field id="st-branch" label="Branch" error={errors.branch}><input id="st-branch" name="branch" defaultValue={cur.branch} maxLength={80} required /></Field>
             <div className="adm-actions span2">
               <button type="button" className="adm-btn" onClick={() => setEdit(null)} disabled={busy}>cancel</button>
               <button type="submit" className="adm-btn primary" disabled={busy} aria-busy={busy}>{busy ? 'saving…' : edit === 'new' ? 'add student' : 'save changes'}</button>

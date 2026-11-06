@@ -100,14 +100,29 @@ const STUDENT_SQL = `
   SELECT st.*, COUNT(DISTINCT CASE WHEN s.correct = 1 THEN s.flag_id END) AS solved, COUNT(s.id) AS attempts
     FROM students st LEFT JOIN submissions s ON s.student_email = st.email`
 
+// Maximum lengths match the column sizes in config/schema.js; without them an over-long value fails in MySQL as a 500.
 function validateStudent(b, partial = false) {
+  const t = (v) => (typeof v === 'string' ? v.trim() : '') // anything that isn't a string (object, array, number) counts as empty
   const e = {}
-  if (!partial || b.fullName !== undefined) if (!b.fullName || b.fullName.trim().length < 2) e.fullName = 'Full name is required.'
-  if (!partial || b.email !== undefined) if (!EMAIL_RE.test(b.email ?? '')) e.email = 'Valid email required.'
-  if (!partial || b.phone !== undefined) if (!PHONE_RE.test(b.phone ?? '')) e.phone = '10-digit mobile required.'
-  if (!partial || b.institution !== undefined) if (!b.institution || b.institution.trim().length < 2) e.institution = 'Institution is required.'
-  if (!partial || b.branch !== undefined) if (!b.branch || b.branch.trim().length < 2) e.branch = 'Branch is required.'
-  if (!partial || b.rollNumber !== undefined) if (!ROLL_RE.test(normRoll(b.rollNumber))) e.rollNumber = 'Roll number: 3–30 letters/digits.'
+  const name = t(b.fullName), email = t(b.email), inst = t(b.institution), branch = t(b.branch)
+  if (!partial || b.fullName !== undefined) {
+    if (name.length < 2) e.fullName = 'Full name is required.'
+    else if (name.length > 120) e.fullName = 'Name is too long (max 120 characters).'
+  }
+  if (!partial || b.email !== undefined) {
+    if (!EMAIL_RE.test(email)) e.email = 'Valid email required.'
+    else if (email.length > 190) e.email = 'Email is too long (max 190 characters).'
+  }
+  if (!partial || b.phone !== undefined) if (!PHONE_RE.test(t(b.phone))) e.phone = '10-digit mobile required.'
+  if (!partial || b.institution !== undefined) {
+    if (inst.length < 2) e.institution = 'Institution is required.'
+    else if (inst.length > 160) e.institution = 'Too long (max 160 characters).'
+  }
+  if (!partial || b.branch !== undefined) {
+    if (branch.length < 2) e.branch = 'Branch is required.'
+    else if (branch.length > 80) e.branch = 'Too long (max 80 characters).'
+  }
+  if (!partial || b.rollNumber !== undefined) if (!ROLL_RE.test(normRoll(t(b.rollNumber)))) e.rollNumber = 'Roll number: 3–30 letters/digits.'
   return e
 }
 

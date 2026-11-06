@@ -221,17 +221,17 @@ export function SignupForm({ onSuccess, onStatus }: { onSuccess: (s: AuthSession
     <form className="tform" onSubmit={submit} {...formProps}>
       <div className="tgrid">
         <Field id="su-name" cmd="fullname" label="Full name" error={shown.fullName}>
-          <input id="su-name" name="fullName" autoComplete="name" required placeholder="Enter your full name" />
+          <input id="su-name" name="fullName" autoComplete="name" required placeholder="Enter your full name" maxLength={120} />
         </Field>
         <Field id="su-email" cmd="email" label="Email" error={shown.email}>
-          <input id="su-email" name="email" type="email" autoComplete="email" inputMode="email" required placeholder="you@college.edu" />
+          <input id="su-email" name="email" type="email" autoComplete="email" inputMode="email" required placeholder="you@college.edu" maxLength={190} />
         </Field>
         <Field id="su-phone" cmd="mobile" label="Mobile number" error={shown.phone}>
           <input id="su-phone" name="phone" type="tel" autoComplete="tel-national" inputMode="numeric" required placeholder="10-digit mobile number"
             maxLength={10} pattern="[0-9]{10}" onInput={digitsOnly} />
         </Field>
         <Field id="su-inst" cmd="institution" label="College / organisation" error={shown.institution}>
-          <input id="su-inst" name="institution" autoComplete="organization" required placeholder="Your institution" />
+          <input id="su-inst" name="institution" autoComplete="organization" required placeholder="Your institution" maxLength={160} />
         </Field>
         <Field id="su-branch" cmd="branch" label="Branch / department" error={shown.branch}>
           <input id="su-branch" name="branch" autoComplete="off" required placeholder="e.g. CSE, ECE, IT" maxLength={80} />
